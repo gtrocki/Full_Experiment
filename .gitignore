@@ -1,4 +1,5 @@
 data/
 .idea/
 .venv/
-
+segment_and_flatten_leaves/.source.txt
+segment_and_flatten_leaves/.target.txt

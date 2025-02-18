@@ -35,7 +35,7 @@ def copy_fused_files(source_path, destination_path):
 
 def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: int, color_range: np.ndarray = np.array([-0.5, 0.2, -0.7, 0]),
                         extra_color: int = None, extra_color_range: tuple = 0, result_option: int = 0,
-                        blueprint_path: str = config.BLUEPRINT_PATH) -> int:
+                        color: str = 'red', blueprint_path: str = config.BLUEPRINT_PATH) -> int:
     """
     Runs a full experiment for a single leaf plotting the mean curvature.
     :param base_path: Path of the folder where the reconstructions are stored.
@@ -83,11 +83,11 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
                                            mapping=config.FIT_TYPE)
 
             # target_path_2d = base_path + "Session_" + str(j) + "/pcd_2d.csv"
-            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + config.COLOR + ".csv")
+            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + color + ".csv")
             # target_path_3d = base_path + "Session_" + str(j) + "/pcd_3d.csv"
-            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + config.COLOR + ".csv")
+            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + color + ".csv")
             target_path_3d_original_size = os.path.join(base_path, "Session_" + str(j),
-                                                        "pcd_3d_" + config.COLOR + "_original_size.csv")
+                                                        "pcd_3d_" + color + "_original_size.csv")
             scores = fitter.flatten_scale_and_save(points, target_path_2d, target_path_3d, target_path_3d_original_size)
             print(f"scores = {scores}")
             print(f"Session {j}: done")
@@ -95,11 +95,11 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
             fitter = isomap_fit.IsomapFit(blueprint_path,
                                            mapping=config.FIT_TYPE)
             # target_path_2d = base_path + "Session_" + str(j) + "/pcd_2d.csv"
-            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + config.COLOR + ".csv")
+            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + color + ".csv")
             # target_path_3d = base_path + "Session_" + str(j) + "/pcd_3d.csv"
-            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + config.COLOR + ".csv")
+            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + color + ".csv")
             target_path_3d_original_size = os.path.join(base_path, "Session_" + str(j),
-                                                        "pcd_3d_" + config.COLOR + "_original_size.csv")
+                                                        "pcd_3d_" + color + "_original_size.csv")
 
             if (i / config.GMMREG_IC_PERIOD) == 0:
                 scores = fitter.flatten_scale_and_save(points, target_path_2d, target_path_3d, target_path_3d_original_size)
@@ -118,18 +118,18 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
                                            mapping=config.FIT_TYPE)
 
             # target_path_2d = base_path + "Session_" + str(j) + "/pcd_2d.csv"
-            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + config.COLOR + ".csv")
+            target_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + color + ".csv")
             # target_path_3d = base_path + "Session_" + str(j) + "/pcd_3d.csv"
-            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + config.COLOR + ".csv")
+            target_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + color + ".csv")
             target_path_3d_original_size = os.path.join(base_path, "Session_" + str(j),
-                                                        "pcd_3d_" + config.COLOR + "_original_size.csv")
+                                                        "pcd_3d_" + color + "_original_size.csv")
             fitter.flatten_and_save(points, target_path_2d, target_path_3d, target_path_3d_original_size)
         if result_option == 3:
             fitter = isomap_fit.IsomapFit(blueprint_path,
                                            mapping=config.FIT_TYPE)
 
             print(f'Session: {j}')
-            file_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + config.COLOR + ".csv")
+            file_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + color + ".csv")
             point_cloud_2d = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
             fitter.plot_of_fitting(point_cloud_2d)
 
@@ -139,9 +139,9 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
 
 
             print(f'Session: {j}')
-            file_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + config.COLOR + ".csv")
+            file_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_" + color + ".csv")
             point_cloud_2d = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
-            file_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + config.COLOR + ".csv")
+            file_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_" + color + ".csv")
             point_cloud_3d = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
 
             fitter.scale_3d_point_cloud(point_cloud_3d, point_cloud_2d, file_path_3d)
@@ -185,8 +185,8 @@ if __name__ == "__main__":
             [-0.198, -0.109],  # Point C
             [-0.46, -0.1]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 122, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1)
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 122, 530, color_range=trapezoid, extra_color=1,
+                            extra_color_range=(0, 0.68), result_option=1, color='red')
     elif config.COLOR_CASE == 1:
         # Values for pink leaf.
         # run_full_experiment(config.BASE_EXPERIMENT_PATH, 446, color_range=(-0.4, -0.144, 0.006, 0.167), extra_color=1,
@@ -199,7 +199,7 @@ if __name__ == "__main__":
             [-0.113, -0.011]  # Point D
         ])
         run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1)
+                            extra_color_range=(0, 0.68), result_option=1, color='pink')
     elif config.COLOR_CASE == 2:
         # Values for blue leaf.
         trapezoid = np.array([
@@ -209,7 +209,7 @@ if __name__ == "__main__":
             [0.023, 0.038]  # Point D
         ])
         run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1)
+                            extra_color_range=(0, 0.68), result_option=1, color='blue')
     elif config.COLOR_CASE == 3:
         # Values for green leaf.
         trapezoid = np.array([
@@ -218,8 +218,8 @@ if __name__ == "__main__":
             [0.164, 0.174],  # Point C
             [0.02, 0.038]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 10, color_range=trapezoid, extra_color=0,
-                            extra_color_range=(0, 0.5), result_option=1)
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 10, 530, color_range=trapezoid, extra_color=0,
+                            extra_color_range=(0, 0.5), result_option=1, color='green')
     elif config.COLOR_CASE == 4:
         # Values for turquoise leaf.
         trapezoid = np.array([
@@ -229,4 +229,4 @@ if __name__ == "__main__":
             [0.027, -0.061]  # Point D
         ])
         run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1)
+                            extra_color_range=(0, 0.68), result_option=1, color='turquoise')
