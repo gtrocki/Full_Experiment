@@ -31,10 +31,10 @@ CROPPING_MAX_BOUND = [1, 1, 2] #[1.5, 1.5, 1]
 # The base path where the reconstructions of the experiment are saved.
 drive1 = "Y:"
 drive2 = "C:"
-BASE_EXPERIMENT_PATH = os.path.join(drive2, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-25-14-58-28")
+BASE_EXPERIMENT_PATH = os.path.join(drive2, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-09-12-12-23")
 
 # The path of the file containing the 2d image that represents the leaf blueprint.
-BLUEPRINT_PATH = os.path.join("blueprints", BLUEPRINT_COLOR + "_leaf_simple.jpg")
+BLUEPRINT_PATH = os.path.join("../blueprints", BLUEPRINT_COLOR + "_leaf_simple.jpg")
 
 FIT_TYPE = USE_ISOMAP # Choose the tipe of fitting algorithm between isomap and locally linear embedding. Options of values
 # are: IsomapFit.USE_ISOMAP or IsomapFit.USE_LLE.

@@ -5,13 +5,15 @@ from scipy.sparse import lil_matrix
 from scipy.spatial import KDTree
 from sklearn.manifold import Isomap, LocallyLinearEmbedding
 from sklearn.neighbors import NearestNeighbors
-from sklearn.base import BaseEstimator, TransformerMixin
+# from sklearn.base import BaseEstimator, TransformerMixin
 import cv2
-from PIL import Image
+# from PIL import Image
 import gmmreg
 import config
 import math
 from scipy.spatial.distance import pdist
+from general_functions.point_cloud_manipulations import (image_to_point_array, PointCloudScaler,
+                                                         plot_overlapping_2d_point_clouds)
 
 
 # =============================================================================
@@ -96,85 +98,6 @@ def sort_points_by_theta(points: np.ndarray) -> np.ndarray:
     theta_values = polar_points[:, 1]
     sorted_indices = np.argsort(theta_values)
     return sorted_indices
-
-
-# =============================================================================
-# Scaler class to normalize the point cloud. We will have two separate classes for this.
-# The classes are PointCloudScaler and PointCloudWidthScaler. The first one is what we use
-# on the point cloud that we flattened using isomap. It will scale the largest distance from
-# the center (mean) of the point cloud to one of its points to be 0.5. The second one is what
-# we will use on the point cloud created from the picture of the blueprint (the target for)
-# fitting. This will turn the width of the point cloud (the leaf) to be 0.5.
-
-class PointCloudScaler(BaseEstimator, TransformerMixin):
-    def __init__(self, target_distance=1.0):
-        self.scaling_factor = None
-        self.mean_position = None
-        self.center_position = None
-        self.target_distance = target_distance
-
-    # def fit(self, X):
-    #     self.mean_position = np.mean(X, axis=0)
-    #     centered_points = X - self.mean_position
-    #     distances = np.linalg.norm(centered_points, axis=1)
-    #     max_distance = np.max(distances)
-    #     self.scaling_factor = self.target_distance / max_distance
-    #     return self
-
-    def fit(self, X):
-        # Calculate the bounding box
-        min_coords = np.min(X, axis=0)
-        max_coords = np.max(X, axis=0)
-
-        # Find the geometric center of the bounding box
-        self.center_position = (max_coords + min_coords) / 2
-
-        # Calculate the width of the bounding box (max x - min x)
-        current_width = max_coords[0] - min_coords[0]
-
-        # Determine the scaling factor based on the target width
-        self.scaling_factor = self.target_distance / current_width
-        return self
-
-    def transform(self, X):
-        # centered_points = X - self.mean_position
-        centered_points = X - self.center_position
-        scaled_points = centered_points * self.scaling_factor
-        return scaled_points
-
-
-class PointCloudWidthScaler(BaseEstimator, TransformerMixin):
-    def __init__(self, target_width=0.5):
-        self.scaling_factor = None
-        self.mean_position = None
-        self.target_width = target_width
-
-    def fit(self, X):
-        # Calculate the mean position of the point cloud
-        self.mean_position = np.mean(X, axis=0)
-
-        # Center the points by subtracting the mean
-        centered_points = X - self.mean_position
-
-        # Calculate the extent (range) of the point cloud along each axis
-        min_values = np.min(centered_points, axis=0)
-        max_values = np.max(centered_points, axis=0)
-        extents = max_values - min_values
-
-        # The width is the smallest extent
-        current_width = np.min(extents)
-
-        # Calculate the scaling factor to make the width equal to the target width
-        self.scaling_factor = self.target_width / current_width
-        return self
-
-    def transform(self, X):
-        # Center the points by subtracting the mean
-        centered_points = X - self.mean_position
-
-        # Scale the points
-        scaled_points = centered_points * self.scaling_factor
-        return scaled_points
 # =============================================================================
 
 
@@ -372,34 +295,6 @@ class IsomapFit:
         iou_score = intersection_size / union_size
 
         return iou_score
-
-    # --------------------------------------------------------------------------
-
-    def image_to_point_array(self, image_path: str) -> np.ndarray:
-        """
-        Receives the path to an image and returns the corresponding point array.
-        For example from an image of the "ideal" leaf you can get array of points in that shape
-        :param image_path: The path to the image.
-        :return:
-        Return the point array.
-        """
-        # Load the image as a numpy array and normalize its values to [0, 1]
-        image = np.asarray(Image.open(image_path).convert("1"))
-        img_points = np.where(image == False)
-
-        img_points = np.dstack(img_points)[0]
-
-        # Normalize points
-        # scaler = MinMaxScaler((-0.5, 0.5))
-        # img_points = scaler.fit_transform(img_points)
-        # scaler = PointCloudWidthScaler(target_width=0.5)
-        scaler = PointCloudScaler(target_distance=1.0)
-        img_points = scaler.fit_transform(img_points)
-
-        # Downsample points with pcd
-        img_points = downsample_2d(img_points, voxel_size=0.03)
-
-        return img_points
 
     # --------------------------------------------------------------------------
 
@@ -602,7 +497,7 @@ class IsomapFit:
         image_with_closing = self.perform_closing_on_image(image, 12, 2, 15)
 
         # Fit to ideal image
-        image_points = self.image_to_point_array(self.blueprint_path)
+        image_points = image_to_point_array(self.blueprint_path)
         if config.GMMREG_FITTING == True:
             transformed_points, scores = self.fit_gmmreg_best(points_2d, image_points, case_number=gmmreg_case_number)
             points_2d = transformed_points
@@ -690,7 +585,7 @@ class IsomapFit:
         points_2d = scaler.fit_transform(points_2d_original)
 
         # Fit to ideal image
-        image_points = self.image_to_point_array(self.blueprint_path)
+        image_points = image_to_point_array(self.blueprint_path)
 
         # Scale the 3d point cloud so it is the same size as the 2d one.
         distances_original = np.linalg.norm(points_2d_original, axis=1)
@@ -788,12 +683,8 @@ class IsomapFit:
         we are trying to fit in 2d to find local coordinates.
         :param points_2d: The point cloud to be plotted.
         """
-        image_points = self.image_to_point_array(self.blueprint_path)
-        plt.scatter(image_points[:, 0], image_points[:, 1], color='red', marker='o', label='image points')
-        plt.scatter(points_2d[:, 0], points_2d[:, 1], color='blue', marker='x', label='data points')
-        plt.axis('equal')
-        plt.title("Plot of fitting")
-        plt.show()
+        image_points = image_to_point_array(self.blueprint_path)
+        plot_overlapping_2d_point_clouds(image_points, points_2d)
 
         return
 

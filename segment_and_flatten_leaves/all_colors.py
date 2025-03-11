@@ -20,34 +20,34 @@ if __name__ == "__main__":
                 [-0.198, -0.109],  # Point C
                 [-0.46, -0.1]  # Point D
             ])
-            blueprint_path = os.path.join("blueprints", "red" + "_leaf_simple.jpg")
-            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531,
+            blueprint_path = os.path.join("../blueprints", "red" + "_leaf_simple.jpg")
+            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 2, 1,
                                                 color_range=trapezoid, extra_color=1, extra_color_range=(0, 0.68),
-                                                result_option=1, blueprint_path=blueprint_path)
+                                                result_option=1, color="red", blueprint_path=blueprint_path)
         elif color_case == 1:
             # Values for pink leaf.
             trapezoid = np.array([
                 [-0.350, 0.106],  # Point A
-                [-0.250, 0.194],  # Point B
+                [-0.210, 0.194],  # Point B
                 [-0.054, 0.031],  # Point C
                 [-0.113, -0.011]  # Point D
             ])
-            blueprint_path = os.path.join("blueprints", "pink" + "_leaf_simple.jpg")
-            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531,
+            blueprint_path = os.path.join("../blueprints", "pink" + "_leaf_simple.jpg")
+            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 2, 1,
                                                 color_range=trapezoid, extra_color=1, extra_color_range=(0, 0.68),
-                                                result_option=1, blueprint_path=blueprint_path)
+                                                result_option=1, color="pink", blueprint_path=blueprint_path)
         elif color_case == 2:
             # Values for blue leaf.
             trapezoid = np.array([
                 [-0.040, 0.02],  # Point A
-                [-0.038, 0.215],  # Point B
+                [-0.038, 0.235],  # Point B
                 [0.170, 0.219],  # Point C
-                [0.023, 0.038]  # Point D
+                [0.046, 0.047]  # Point D
             ])
-            blueprint_path = os.path.join("blueprints", "blue" + "_leaf_simple.jpg")
-            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531,
+            blueprint_path = os.path.join("../blueprints", "blue" + "_leaf_simple.jpg")
+            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 2, 1,
                                                 color_range=trapezoid, extra_color=1, extra_color_range=(0, 0.68),
-                                                result_option=1, blueprint_path=blueprint_path)
+                                                result_option=1, color="blue", blueprint_path=blueprint_path)
         elif color_case == 3:
             # Values for green leaf.
             trapezoid = np.array([
@@ -56,10 +56,10 @@ if __name__ == "__main__":
                 [0.164, 0.174],  # Point C
                 [0.02, 0.038]  # Point D
             ])
-            blueprint_path = os.path.join("blueprints", "green" + "_leaf_simple.jpg")
-            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531,
+            blueprint_path = os.path.join("../blueprints", "green" + "_leaf_simple.jpg")
+            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 2, 1,
                                                 color_range=trapezoid, extra_color=0, extra_color_range=(0, 0.5),
-                                                result_option=1, blueprint_path=blueprint_path)
+                                                result_option=1, color="green", blueprint_path=blueprint_path)
         elif color_case == 4:
             # Values for turquoise leaf.
             trapezoid = np.array([
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 [0.320, -0.040],  # Point C
                 [0.027, -0.061]  # Point D
             ])
-            blueprint_path = os.path.join("blueprints", "turquoise" + "_leaf_simple.jpg")
-            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531,
+            blueprint_path = os.path.join("../blueprints", "turquoise" + "_leaf_simple.jpg")
+            full_experiment.run_full_experiment(config.BASE_EXPERIMENT_PATH, 2, 1,
                                                 color_range=trapezoid, extra_color=1, extra_color_range=(0, 0.68),
-                                                result_option=1, blueprint_path=blueprint_path)
+                                                result_option=1, color="turquoise", blueprint_path=blueprint_path)

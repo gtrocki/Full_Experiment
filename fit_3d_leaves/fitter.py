@@ -2,15 +2,13 @@ import matplotlib.path
 import numpy as np
 import torch
 import pyvista as pv
-from svgpath2mpl import parse_path
 import matplotlib as mpl  # for path transforms
 from matplotlib.patches import PathPatch
 import matplotlib.pyplot as plt
 from matplotlib import colormaps
-# import open3d as o3d
 import config
 import os
-
+from general_functions.point_cloud_manipulations import image_to_point_array, plot_overlapping_2d_point_clouds
 
 # =============================================================================
 class ForceFinderModel(torch.nn.Module):
@@ -105,7 +103,6 @@ class MinSurface():
         b_term = (b[:, 0, 0] + b[:, 0, 0])**2 + torch.sum(b**2, dim=(1, 2))
 
         return E_term, b_term
-
 
     def grad_and_hess(self, val, points):
         # returns the gradient and hessian of val (shape (batch)) with respect to points (shape (batch, 2))
@@ -212,46 +209,63 @@ class MinSurface():
         return self.model
 # =============================================================================
 
-def flip_and_normalize(point_cloud, width=0.5, original_scaling_factor=None, original_min_val_x=None,
-                       original_min_val_y=None):
-    # Transpose the point cloud to flip it counterclockwise by 90 degrees
+def flip_and_normalize(point_cloud, blueprint_point_cloud, width=0.5, original_scaling_factor=None,
+                       original_min_val_x=None, original_min_val_y=None):
+    """
+    The idea of this function is to make the flattened point cloud from the previous step in the analysis and make
+    it fit in the svg path properly so we can identify our generated distribution of points in the path with points
+    in the leaf. In order to do this we need to rotate and scale the point cloud. It is somewhat difficult to find
+    the right scaling and positioning for the point cloud, since our detection of the leaves might be missing parts.
+    However, we know that we are fitting those leaves to other model point clouds which are always complete. So we
+    can try to find the transformation that would work for those and apply the same one for the detected point
+    clouds.
+    :param point_cloud: The point cloud to be flipped and normalized.
+    :param blueprint_point_cloud: The point cloud of the blueprint which we'll use for fitting.
+    :param width: The intended width of the point cloud.
+    :param original_scaling_factor: The original scaling factor in case we want to use the same factor for all frames.
+    :param original_min_val_x: The same for the positioning of the point clouds.
+    :param original_min_val_y: The same for the positioning of the point clouds.
+    :return:
+    Return the normalized cloud.
+    """
+    # Transpose the point cloud and the blueprint to flip it counterclockwise by 90 degrees
     flipped_cloud = np.array([point_cloud[:, 1], -point_cloud[:, 0]]).T
     flipped_cloud_x = flipped_cloud[:, 0]
     flipped_cloud_y = flipped_cloud[:, 1]
+    flipped_blueprint = np.array([blueprint_point_cloud[:, 1], -blueprint_point_cloud[:, 0]]).T
+    flipped_blueprint_x = flipped_blueprint[:, 0]
+    flipped_blueprint_y = flipped_blueprint[:, 1]
 
     # Normalize the longer dimension to fall between 0 and 1
-    max_val_y = np.max(flipped_cloud_y)
-    min_val_y = np.min(flipped_cloud_y)
-    min_val_x = np.min(flipped_cloud_x)
-    max_val_x = np.max(flipped_cloud_x)
-    point_cloud_width = (max_val_x - min_val_x)
+    max_val_y = np.max(flipped_blueprint_y)
+    min_val_y = np.min(flipped_blueprint_y)
+    min_val_x = np.min(flipped_blueprint_x)
+    max_val_x = np.max(flipped_blueprint_x)
+    blueprint_width = (max_val_x - min_val_x)
 
     # Setting the scaling factor so it is calculated for the first point cloud,
     # but we keep using the same value for the latter ones, since all point clouds were fitted to the same base.
     if original_scaling_factor is None:
-        scaling_factor = width / point_cloud_width
+        scaling_factor = width / blueprint_width
     else:
         scaling_factor = original_scaling_factor
     if original_min_val_x is not None:
         min_val_x = original_min_val_x
         min_val_y = original_min_val_y
     normalized_cloud_x = (flipped_cloud_x - min_val_x) * scaling_factor
-    normalized_cloud_y = (flipped_cloud_y - min_val_y) * scaling_factor + 0.09
+    normalized_cloud_y = (flipped_cloud_y - min_val_y) * scaling_factor + 0.075
     normalized_cloud = np.stack([normalized_cloud_x, normalized_cloud_y], axis=1)
+    normalized_blueprint_x = (flipped_blueprint_x - min_val_x) * scaling_factor
+    normalized_blueprint_y = (flipped_blueprint_y - min_val_y) * scaling_factor + 0.075
+    normalized_blueprint = np.stack([normalized_blueprint_x, normalized_blueprint_y], axis=1)
 
     print(f"SCALING FACTOR = {scaling_factor}")
     print(f"width of blueprint = {(max_val_x - min_val_x)}")
 
-    return normalized_cloud, scaling_factor, min_val_x, min_val_y
+    return normalized_cloud, scaling_factor, min_val_x, min_val_y, normalized_blueprint
+# -----------------------------------------------------------------------------
 
-def sample_low_disc_seq(n, path):
-    """
-    Sample a low discrepancy sequence of points within a certain enveloping shape.
-    :param n: The number of points to be sampled
-    :param path: The svg path of the enveloping shape (in our case probably a leaf).
-    :return:
-    Return the sequence of points as a numpy ndarray.
-    """
+def normalize_path(path):
     bbox = path.get_extents()  # Obtain the bounding box of the path, an imaginary rectangular box that completely encloses a geometric shape or a set of points.
     # An affine transformation (norm_trans) is created to translate the path such that its top-left corner is at the origin (0, 0) and scale it so that the larger dimension is normalized to 1.
     norm_trans = mpl.transforms.Affine2D().translate(-bbox.x0, -bbox.y0).scale(1 / max(bbox.width, bbox.height))
@@ -261,6 +275,18 @@ def sample_low_disc_seq(n, path):
     wh = (bbox.width, bbox.height)
     sampling_j = int(np.argmin(wh))  # index of the shortest side of the bounding box
     sampling_bbox_len = wh[sampling_j]  # length of the shortest side of the bounding box
+    return path, wh, sampling_j, sampling_bbox_len
+# -----------------------------------------------------------------------------
+
+def sample_low_disc_seq(n, path):
+    """
+    Sample a low discrepancy sequence of points within a certain enveloping shape.
+    :param n: The number of points to be sampled
+    :param path: The svg path of the enveloping shape (in our case probably a leaf).
+    :return:
+    Return the sequence of points as a numpy ndarray.
+    """
+    path, wh, sampling_j, sampling_bbox_len = normalize_path(path)
     # sample from the leaf using a low discrepancy sequence
     inverse_plastic_ratio = 1 / 1.324717957244746025960908854
     gen = np.random.default_rng(42)  # just to set the first point differently each time
@@ -277,6 +303,7 @@ def sample_low_disc_seq(n, path):
     points = points[path.contains_points(points)]  # filter out points outside the leaf
 
     return points
+# -----------------------------------------------------------------------------
 
 def sample_square_lattice(shape_num_points: tuple, path: matplotlib.patches.Path):
     """
@@ -286,15 +313,10 @@ def sample_square_lattice(shape_num_points: tuple, path: matplotlib.patches.Path
     :return:
     Return the sequence of points as a numpy array.
     """
-    bbox = path.get_extents()  # Obtain the bounding box of the path, an imaginary rectangular box that completely encloses a geometric shape or a set of points.
-    # An affine transformation (norm_trans) is created to translate the path such that its top-left corner is at the origin (0, 0) and scale it so that the larger dimension is normalized to 1.
-    norm_trans = mpl.transforms.Affine2D().translate(-bbox.x0, -bbox.y0).scale(1 / max(bbox.width, bbox.height))
-    # The transformation is applied to the path using transform_path, and the bounding box is recalculated. The width and height of the bounding box are stored in the tuple wh.
-    path = norm_trans.transform_path(path)
-    bbox = path.get_extents()
+    path, wh, sampling_j, sampling_bbox_len = normalize_path(path)
     # Calculate the spacing between points along each dimension
     num_points_width, num_points_height = shape_num_points
-    total_width, total_height = bbox.width, bbox.height
+    total_width, total_height = wh[1], wh[2]
     spacing_width = total_width / (num_points_width - 1)
     spacing_height = total_height / (num_points_height - 1)
 
@@ -311,185 +333,334 @@ def sample_square_lattice(shape_num_points: tuple, path: matplotlib.patches.Path
     points = points[path.contains_points(points)]
 
     return points
-# -----------------------------------------------------------------------------
 
-# Function for plotting the result of the transformation of the model being applied to num_points points sampled
-# from a low discrepancy sequence (a model surface).
-def plot_model(path, model,save_orbit_animation=False, num_points=3000):
-    # plot num_points leaf points using pyvista (and save an orbit animation if requested)
-    # we also plot the points used for the B.C (they look like a solid line along the leaf base)
-    points = sample_low_disc_seq(num_points, path) # Sample the points from a low discrepancy series.
+# =============================================================================
 
-    # Put the points in the model (neural network) to get the output.
-    vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
+class Plotter():
+    """
+    A class that nucleates all plotter functions, so they don't clutter the rest of the code.
+    Whenever we want to plot anything about the process we use the methods of this class.
+    """
+    def __init__(self, path):
+        self.path = path
 
-    # Set up a PyVista plotter and configure the settings.
-    pv.set_plot_theme('dark')
-    plotter = pv.Plotter()
-    plotter.enable_terrain_style(mouse_wheel_zooms=True)
-    plotter.enable_anti_aliasing()
+    def show_all_plots(self, point_cloud_2d):
+        """
+        A function to collect all the plots of the different steps of the process so they don't clutter the different
+        functions.
+        :return:
+        """
 
-    # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
-    mesh = pv.PolyData(vals)
-    points -= np.min(points, axis=0); points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
-    rgb = np.stack((points[:, 0], points[:, 1], np.ones(points.shape[0])*.8), axis=1) # Assign points to be colors.
-    mesh['color'] = rgb
-    # pv.plot(mesh, show_bounds=True, eye_dome_lighting=True)
-    plotter.add_mesh(mesh, point_size=20,
-                     render_points_as_spheres=True,
-                     scalars='color', rgb=True,
-                     )
-
-    # enable eye_dome_lighting
-    plotter.enable_eye_dome_lighting()
-
-    # enable axes, with a large font size
-    plotter.show_grid()
-    plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
-
-    if not save_orbit_animation:
-        plotter.show(auto_close=False)
-    else:
-        path = plotter.generate_orbital_path(n_points=36, shift=mesh.length)
-        # plotter.open_gif("orbit.gif")
-        plotter.open_movie("orbit.mp4")
-        plotter.orbit_on_path(path, write_frames=True)
-        plotter.close()
-
-
-# -----------------------------------------------------------------------------
-
-# Function for plotting the result of the transformation of the model being applied to num_points points sampled
-# from a low discrepancy sequence (a model surface).
-def plot_model_plus_target(path, model, file_path_2d_param: str, file_path_3d_param: str, save_orbit_animation=False, num_points=3000,
-                           scaling_factor = None, min_val_x = None, min_val_y = None):
-    # This defines a Scalable Vector Graphics image which corresponds to the (i think flat) leaf.
-    # You can just get it by parsing the image from Michal.
-
-    # Files containing the point clouds to be fitted.
-    file_path_2d = file_path_2d_param
-    file_path_3d = file_path_3d_param
-
-    point_cloud_2d1 = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
-    point_cloud_3d1 = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
-
-    point_cloud_2d = point_cloud_2d1
-    # pcd = o3d.io.read_point_cloud(file_path_3d)
-    point_cloud_3d = point_cloud_3d1  # np.asarray(pcd.points) * scaling_factor
-
-    print(f"point cloud 2d = {point_cloud_2d}")
-    print(f"point cloud 3d = {point_cloud_3d}")
-
-    # sample points from a low discrepancy sequence
+        return
     # -----------------------------------------------------------------------------
-    bbox = path.get_extents()  # Obtain the bounding box of the path, an imaginary rectangular box that completely encloses a geometric shape or a set of points.
-    # An affine transformation (norm_trans) is created to translate the path such that its top-left corner is at the origin (0, 0) and scale it so that the larger dimension is normalized to 1.
-    norm_trans = mpl.transforms.Affine2D().translate(-bbox.x0, -bbox.y0).scale(1 / max(bbox.width, bbox.height))
-    # The transformation is applied to the path using transform_path, and the bounding box is recalculated. The width and height of the bounding box are stored in the tuple wh.
-    path = norm_trans.transform_path(path)
-    bbox = path.get_extents()
-    wh = (bbox.width, bbox.height)
-    sampling_j = int(np.argmin(wh))  # index of the shortest side of the bounding box
-    sampling_bbox_len = wh[sampling_j]  # length of the shortest side of the bounding box
 
-    point_cloud_2d, scaling_factor, min_val_x, min_val_y = flip_and_normalize(point_cloud_2d, wh[0], original_scaling_factor=scaling_factor,
-                                                        original_min_val_x=min_val_x, original_min_val_y=min_val_y)
-    point_cloud_3d *= scaling_factor
-    point_cloud_2d_x = point_cloud_2d[:, 0]
-    point_cloud_2d_y = point_cloud_2d[:, 1]
+    def plot_2d_point_cloud_with_blueprint(self, file_path_2d, blueprint_path):
 
-    # # ----------------- PLOT FOR TEST -----------------
-    # if config.SHOW_PLOTS == True:
-    #     # Create a figure and axis
-    #     fig, ax = plt.subplots()
-    #     # for plotting
-    #     patch = PathPatch(path, facecolor="none", lw=2)
-    #     ax.add_patch(patch)
-    #     # Plot the point where we will apply the force in blue.
-    #     # ax.scatter(wh[0]/2, leaf_force_height, color="blue", label="Blue Point")
-    #     # ax.scatter(wh[0]/2, leaf_force_height2, color="blue", label="Blue Point")
-    #     # ax.scatter(wh[0]/2, leaf_weight_height, color="blue", label="Blue Point")
-    #     # ax.scatter(wh[0]/2, leaf_weight_height2, color="blue", label="Blue Point")
-    #     # Plot the point cloud.
-    #     ax.scatter(point_cloud_2d_x, point_cloud_2d_y, color="blue", label="Blue Point")
-    #     # Set axis limits and labels
-    #     # ax.set_xlim(0, wh[0])
-    #     # ax.set_ylim(0, wh[1])
-    #     ax.set_aspect('equal')
-    #     ax.set_xlabel("X")
-    #     ax.set_ylabel("Y")
-    #     # Add a legend
-    #     ax.legend("plot for test")
-    #     # Show the plot
-    #     plt.show()
-    # # -------------- END PLOT FOR TEST -----------------
+        blueprint_point_cloud = image_to_point_array(blueprint_path)
+        point_cloud_2d = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
+        plot_overlapping_2d_point_clouds(blueprint_point_cloud, point_cloud_2d)
+    # -----------------------------------------------------------------------------
 
-    # now, the model of r(X, Y):
-    # Essentially, it is a model with 2 inputs, 3 outputs and two inner layers with 30 neurons. The activation values
-    # are obtained at every step by using tanh of the linear combinations of the previous activations with the weights
-    # and the bias.
-    # build a ForceFinderModel object that takes one force and has two hidden layers with 50 nodes each.
+    def plot_transformed_2d_pcd_and_path(self, file_path_2d, blueprint_path, pcd_option=0):
 
-    surface = MinSurface(point_cloud_2d, point_cloud_3d, path, model)
+        path = self.path
+        point_cloud_2d = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
+        blueprint_point_cloud = image_to_point_array(blueprint_path)
 
-    plot_mean_curvature(path, surface, point_cloud_3d, point_cloud_2d, model)
+        path, wh, sampling_j, sampling_bbox_len = normalize_path(path)
 
-    # # plot num_points leaf points using pyvista (and save an orbit animation if requested)
-    # # we also plot the points of the 3d point cloud used for fitting the model
-    # points = sample_low_disc_seq(num_points, path) # Sample the points from a low discrepancy series.
-    #
-    # point_cloud_3d1 = np.loadtxt(target_point_cloud_3d_path, delimiter=',', skiprows=1)
-    #
-    #
-    # # Put the points in the model (neural network) to get the output.
-    # vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
-    #
-    # # Set up a PyVista plotter and configure the settings.
-    # pv.set_plot_theme('dark')
-    # plotter = pv.Plotter()
-    # plotter.enable_terrain_style(mouse_wheel_zooms=True)
-    # plotter.enable_anti_aliasing()
-    #
-    # rgb1 = np.stack((np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0])), axis=1)
-    # mesh1 = pv.PolyData(point_cloud_3d1)
-    # mesh1['color'] = rgb1
-    #
-    # # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
-    # mesh = pv.PolyData(vals)
-    # points -= np.min(points, axis=0); points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
-    # rgb = np.stack((points[:, 0], points[:, 1], np.ones(points.shape[0])*.8), axis=1) # Assign points to be colors.
-    # mesh['color'] = rgb
-    # # pv.plot(mesh, show_bounds=True, eye_dome_lighting=True)
-    # plotter.add_mesh(mesh, point_size=20,
-    #                  render_points_as_spheres=True,
-    #                  scalars='color', rgb=True,
-    #                  )
-    #
-    # plotter.add_mesh(mesh1, point_size=20,
-    #                  render_points_as_spheres=True,
-    #                  scalars='color', rgb=True,
-    #                  )
-    #
-    # # enable eye_dome_lighting
-    # plotter.enable_eye_dome_lighting()
-    #
-    # # enable axes, with a large font size
-    # plotter.show_grid()
-    # plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
-    #
-    # if not save_orbit_animation:
-    #     plotter.show(auto_close=False)
-    # else:
-    #     path = plotter.generate_orbital_path(n_points=36, shift=mesh.length)
-    #     # plotter.open_gif("orbit.gif")
-    #     plotter.open_movie("orbit.mp4")
-    #     plotter.orbit_on_path(path, write_frames=True)
-    #     plotter.close()
+        (point_cloud_2d, scaling_factor,
+         min_val_x, min_val_y, blueprint_point_cloud) = flip_and_normalize(point_cloud_2d, blueprint_point_cloud, wh[0])
 
-    return scaling_factor, min_val_x, min_val_y
+        # Create a figure and axis
+        fig, ax = plt.subplots()
+        # for plotting
+        patch = PathPatch(path, facecolor="none", lw=2)
+        ax.add_patch(patch)
+        if pcd_option == 0:
+            # Plot the point cloud.
+            point_cloud_2d_x = point_cloud_2d[:, 0]
+            point_cloud_2d_y = point_cloud_2d[:, 1]
+        else:
+            # Plot the blueprint.
+            point_cloud_2d_x = blueprint_point_cloud[:, 0]
+            point_cloud_2d_y = blueprint_point_cloud[:, 1]
+        ax.scatter(point_cloud_2d_x, point_cloud_2d_y, color="blue", label="Blue Point")
+        ax.set_aspect('equal')
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        # Add a legend
+        ax.legend("Point cloud vs svg path.")
+        # Show the plot
+        plt.show()
 
+    # -----------------------------------------------------------------------------
 
-# ------------------------------ FUNCTIONS FOR CURVATURE -----------------------------------
+    def plot_2d_and_3d_point_clouds(self, file_path_2d, file_path_3d, session_number):
+        """
+        A method to plot the 2d point cloud together with the target 3d point cloud in the same space.
+        :return:
+        """
+        point_cloud_2d1 = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
+        point_cloud_3d = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
+        point_cloud_2d = np.hstack(
+            (point_cloud_2d1, np.zeros((point_cloud_2d1.shape[0], 1))))  # Turn the 2d point cloud into a 3d one.
+
+        rgb1 = np.stack(
+            (np.ones(point_cloud_3d.shape[0]), np.ones(point_cloud_3d.shape[0]), np.ones(point_cloud_3d.shape[0])),
+            axis=1)
+        rgb2 = np.stack(
+            (np.ones(point_cloud_2d.shape[0]), np.ones(point_cloud_2d.shape[0]), np.ones(point_cloud_2d.shape[0])),
+            axis=1)
+        mesh1 = pv.PolyData(point_cloud_3d)
+        mesh2 = pv.PolyData(point_cloud_2d)
+        mesh1['color'] = rgb1
+        mesh2['color'] = rgb2
+
+        # Set up a PyVista plotter and configure the settings.
+        pv.set_plot_theme('dark')
+        plotter = pv.Plotter()
+        plotter.enable_terrain_style(mouse_wheel_zooms=True)
+        plotter.enable_anti_aliasing()
+
+        # --------------------
+        # for plotting the actual point clouds
+        plotter.add_mesh(mesh1, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+        plotter.add_mesh(mesh2, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+        # --------------------
+
+        # enable eye_dome_lighting
+        plotter.enable_eye_dome_lighting()
+
+        # enable axes, with a large font size
+        plotter.show_grid()
+        plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
+
+        plotter.show(title=str(session_number), auto_close=False)
+
+        return 0
+    # -----------------------------------------------------------------------------
+
+    def plot_mean_curvature(self, surface, point_cloud_3d, point_cloud_2d, model, num_points=3000):
+        # plot num_points leaf points using pyvista (and save an orbit animation if requested)
+        # we also plot the points used for the B.C (they look like a solid line along the leaf base)
+        path = self.path
+        points = sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
+
+        calculator = Calculator(surface)
+        # --------------
+        # for plotting the actual point clouds
+        point_cloud_3d1 = point_cloud_3d
+        point_cloud_2d2 = point_cloud_2d
+        point_cloud_2d2 = np.hstack((point_cloud_2d2, np.zeros((point_cloud_2d2.shape[0], 1))))
+
+        rgb1 = np.stack(
+            (np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0])),
+            axis=1)
+        rgb2 = np.stack(
+            (np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0])),
+            axis=1)
+        mesh1 = pv.PolyData(point_cloud_3d1)
+        mesh2 = pv.PolyData(point_cloud_2d2)
+        mesh1['color'] = rgb1
+        mesh2['color'] = rgb2
+        # --------------
+
+        # Put the points in the model (neural network) to get the output.
+        vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
+
+        mean_curv = calculator.mean_curvature(points).detach().numpy()
+
+        # Set up a PyVista plotter and configure the settings.
+        pv.set_plot_theme('dark')
+        plotter = pv.Plotter()
+        plotter.enable_terrain_style(mouse_wheel_zooms=True)
+        plotter.enable_anti_aliasing()
+
+        # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
+        mesh = pv.PolyData(vals)
+        points -= np.min(points, axis=0)
+        points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
+
+        # Create a colormap instance
+        colormap = colormaps['coolwarm']
+
+        # Normalize the 'mean_curv' values to the range [0, 1]
+        normalized_mean_curv = (mean_curv - mean_curv.min()) / (mean_curv.max() - mean_curv.min())
+
+        # Map normalized 'mean_curv' values to RGBA colors using the colormap
+        rgb = colormap(normalized_mean_curv)
+
+        # rgb = np.stack((mean_curv, np.ones(points.shape[0]) * .3, np.ones(points.shape[0]) * .8), axis=1)  # Assign points to be colors.
+        mesh['color'] = rgb
+        # pv.plot(mesh, show_bounds=True, eye_dome_lighting=True)
+        plotter.add_mesh(mesh, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+
+        # --------------------
+        # for plotting the actual point clouds
+        plotter.add_mesh(mesh1, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+        plotter.add_mesh(mesh2, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+        # --------------------
+
+        # enable eye_dome_lighting
+        plotter.enable_eye_dome_lighting()
+
+        # enable axes, with a large font size
+        plotter.show_grid()
+        plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
+
+        plotter.show(auto_close=False)
+# -----------------------------------------------------------------------------
+
+    # Function for plotting the result of the transformation of the model being applied to num_points points sampled
+    # from a low discrepancy sequence (a model surface).
+    def plot_model_plus_target(self, model, file_path_2d_param: str, file_path_3d_param: str, blueprint_path: str,
+                               save_orbit_animation=False, num_points=3000,
+                               scaling_factor=None, min_val_x=None, min_val_y=None):
+        # This defines a Scalable Vector Graphics image which corresponds to the (i think flat) leaf.
+        # You can just get it by parsing the image from Michal.
+
+        path = self.path
+
+        # Files containing the point clouds to be fitted.
+        file_path_2d = file_path_2d_param
+        file_path_3d = file_path_3d_param
+
+        point_cloud_2d1 = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
+        point_cloud_3d1 = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
+        blueprint_point_cloud = image_to_point_array(blueprint_path)
+
+        point_cloud_2d = point_cloud_2d1
+        # pcd = o3d.io.read_point_cloud(file_path_3d)
+        point_cloud_3d = point_cloud_3d1  # np.asarray(pcd.points) * scaling_factor
+
+        print(f"point cloud 2d = {point_cloud_2d}")
+        print(f"point cloud 3d = {point_cloud_3d}")
+
+        # sample points from a low discrepancy sequence
+        # -----------------------------------------------------------------------------
+        path, wh, sampling_j, sampling_bbox_len = normalize_path(path)
+
+        (point_cloud_2d, scaling_factor,
+         min_val_x, min_val_y, blueprint_point_cloud) = flip_and_normalize(point_cloud_2d, blueprint_point_cloud, wh[0],
+                                                                           original_scaling_factor=scaling_factor,
+                                                                           original_min_val_x=min_val_x,
+                                                                           original_min_val_y=min_val_y)
+        point_cloud_3d *= scaling_factor
+        point_cloud_2d_x = point_cloud_2d[:, 0]
+        point_cloud_2d_y = point_cloud_2d[:, 1]
+
+        # now, the model of r(X, Y):
+        # Essentially, it is a model with 2 inputs, 3 outputs and two inner layers with 30 neurons. The activation values
+        # are obtained at every step by using tanh of the linear combinations of the previous activations with the weights
+        # and the bias.
+        # build a ForceFinderModel object that takes one force and has two hidden layers with 50 nodes each.
+
+        surface = MinSurface(point_cloud_2d, point_cloud_3d, path, model)
+
+        self.plot_mean_curvature(surface, point_cloud_3d, point_cloud_2d, model)
+
+        return scaling_factor, min_val_x, min_val_y
+# -----------------------------------------------------------------------------
+
+    # Function for plotting the result of the transformation of the model being applied to num_points points sampled
+    # from a low discrepancy sequence (a model surface).
+    def plot_model(self, model, save_orbit_animation=False, num_points=3000):
+        # plot num_points leaf points using pyvista (and save an orbit animation if requested)
+        # we also plot the points used for the B.C (they look like a solid line along the leaf base)
+        path = self.path
+        points = sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
+
+        # Put the points in the model (neural network) to get the output.
+        vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
+
+        # Set up a PyVista plotter and configure the settings.
+        pv.set_plot_theme('dark')
+        plotter = pv.Plotter()
+        plotter.enable_terrain_style(mouse_wheel_zooms=True)
+        plotter.enable_anti_aliasing()
+
+        # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
+        mesh = pv.PolyData(vals)
+        points -= np.min(points, axis=0)
+        points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
+        rgb = np.stack((points[:, 0], points[:, 1], np.ones(points.shape[0]) * .8),
+                       axis=1)  # Assign points to be colors.
+        mesh['color'] = rgb
+        # pv.plot(mesh, show_bounds=True, eye_dome_lighting=True)
+        plotter.add_mesh(mesh, point_size=20,
+                         render_points_as_spheres=True,
+                         scalars='color', rgb=True,
+                         )
+
+        # enable eye_dome_lighting
+        plotter.enable_eye_dome_lighting()
+
+        # enable axes, with a large font size
+        plotter.show_grid()
+        plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
+
+        if not save_orbit_animation:
+            plotter.show(auto_close=False)
+        else:
+            path = plotter.generate_orbital_path(n_points=36, shift=mesh.length)
+            # plotter.open_gif("orbit.gif")
+            plotter.open_movie("orbit.mp4")
+            plotter.orbit_on_path(path, write_frames=True)
+            plotter.close()
+# -----------------------------------------------------------------------------
+
+    def plot_and_save_mean_curvature_2d(self, surface, save_plot: str=0, num_points=3000):
+        path = self.path
+        points = sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
+        # points1 = torch.tensor(points, dtype=torch.float32)
+
+        calculator = Calculator(surface)
+
+        # Put the points in the model (neural network) to get the output.
+        # vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
+
+        mean_curv = calculator.mean_curvature(points).detach().numpy()
+
+        # Normalize the 'mean_curv' values to the range [0, 1]
+        range = 1
+        normalized_mean_curv = normalize_values_torch(mean_curv, range)
+
+        # Create a scatter plot of the points with colors mapped to values
+        scatter = plt.scatter(points[:, 0], points[:, 1], c=normalized_mean_curv, cmap='coolwarm', s=50, vmin=0, vmax=1)
+
+        # Add a colorbar
+        plt.colorbar(scatter, label='Mean curvature')
+
+        # Set plot title and labels (optional)
+        plt.title('2D Point Cloud with Colorbar')
+        plt.xlabel('X-axis')
+        plt.ylabel('Y-axis')
+        plt.axis('equal')
+        if save_plot != 0:
+            plt.savefig(save_plot)
+        if config.SHOW_PLOTS == True:
+            # Show the plot
+            plt.show()
+        else:
+            plt.clf()
+# =============================================================================
+
 class Calculator():
     """
     Defines a class that will perform the relevant calculations on a surface.
@@ -591,88 +762,13 @@ class Calculator():
         shape_op = self.shape_operator(points)
         mean_curvature = shape_op.diagonal(offset=0, dim1=-1, dim2=-2).sum(-1) / 2
         return mean_curvature
-# -----------------------------------------------------------------------------
-def plot_mean_curvature(path, surface, point_cloud_3d, point_cloud_2d, model, num_points=3000):
-    # plot num_points leaf points using pyvista (and save an orbit animation if requested)
-    # we also plot the points used for the B.C (they look like a solid line along the leaf base)
-    points = sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
-
-    calculator = Calculator(surface)
-    # --------------
-    # for plotting the actual point clouds
-    point_cloud_3d1 = point_cloud_3d
-    point_cloud_2d2 = point_cloud_2d
-    point_cloud_2d2 = np.hstack((point_cloud_2d2, np.zeros((point_cloud_2d2.shape[0], 1))))
-
-    rgb1 = np.stack((np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0])), axis=1)
-    rgb2 = np.stack((np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0])), axis=1)
-    mesh1 = pv.PolyData(point_cloud_3d1)
-    mesh2 = pv.PolyData(point_cloud_2d2)
-    mesh1['color'] = rgb1
-    mesh2['color'] = rgb2
-    # --------------
-
-    # Put the points in the model (neural network) to get the output.
-    vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
-
-    mean_curv = calculator.mean_curvature(points).detach().numpy()
-
-    # Set up a PyVista plotter and configure the settings.
-    pv.set_plot_theme('dark')
-    plotter = pv.Plotter()
-    plotter.enable_terrain_style(mouse_wheel_zooms=True)
-    plotter.enable_anti_aliasing()
-
-    # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
-    mesh = pv.PolyData(vals)
-    points -= np.min(points, axis=0)
-    points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
-
-    # Create a colormap instance
-    colormap = colormaps['coolwarm']
-
-    # Normalize the 'mean_curv' values to the range [0, 1]
-    normalized_mean_curv = (mean_curv - mean_curv.min()) / (mean_curv.max() - mean_curv.min())
-
-    # Map normalized 'mean_curv' values to RGBA colors using the colormap
-    rgb = colormap(normalized_mean_curv)
-
-    # rgb = np.stack((mean_curv, np.ones(points.shape[0]) * .3, np.ones(points.shape[0]) * .8), axis=1)  # Assign points to be colors.
-    mesh['color'] = rgb
-    # pv.plot(mesh, show_bounds=True, eye_dome_lighting=True)
-    plotter.add_mesh(mesh, point_size=20,
-                     render_points_as_spheres=True,
-                     scalars='color', rgb=True,
-                     )
-
-
-    # --------------------
-    # for plotting the actual point clouds
-    plotter.add_mesh(mesh1, point_size=20,
-                     render_points_as_spheres=True,
-                     scalars='color', rgb=True,
-                     )
-    plotter.add_mesh(mesh2, point_size=20,
-                     render_points_as_spheres=True,
-                     scalars='color', rgb=True,
-                     )
-    # --------------------
-
-    # enable eye_dome_lighting
-    plotter.enable_eye_dome_lighting()
-
-    # enable axes, with a large font size
-    plotter.show_grid()
-    plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
-
-
-    plotter.show(auto_close=False)
-
-
+# =============================================================================
 
 # Define the sigmoid function using torch
 def sigmoid(x, range_=6):
     return 1 / (1 + torch.exp(-range_ * x))
+# -----------------------------------------------------------------------------
+
 
 # Normalize the values using the sigmoid function
 def normalize_values_torch(values, range):
@@ -681,51 +777,7 @@ def normalize_values_torch(values, range):
     sigmoid_range = range  # Adjust as needed
     normalized_values = sigmoid((values_tensor - torch.mean(values_tensor)) / torch.std(values_tensor), range_=sigmoid_range)
     return normalized_values.numpy()
-
-def plot_and_save_mean_curvature_2d(path, surface, save_plot=0, num_points=3000):
-    points = sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
-    # points1 = torch.tensor(points, dtype=torch.float32)
-
-    calculator = Calculator(surface)
-
-    # Put the points in the model (neural network) to get the output.
-    # vals = model(torch.tensor(points, dtype=torch.float32)).detach().numpy()
-
-    mean_curv = calculator.mean_curvature(points).detach().numpy()
-
-    # Create a mesh that represents the data to be visualized, choose the colors and add it to the plotter.
-    point_cloud_2d = np.hstack((points, np.zeros((points.shape[0], 1))))
-
-    # points -= np.min(points, axis=0)
-    # points /= np.max(points, axis=0)  # normalize points to between 0 and 1.
-
-    # Create a colormap instance
-    colormap = colormaps['coolwarm']
-
-    # Normalize the 'mean_curv' values to the range [0, 1]
-    # normalized_mean_curv = (mean_curv - mean_curv.min()) / (mean_curv.max() - mean_curv.min())
-    range = mean_curv.max() - mean_curv.min()
-    range = 1
-    normalized_mean_curv = normalize_values_torch(mean_curv, range)
-
-    # Create a scatter plot of the points with colors mapped to values
-    scatter = plt.scatter(points[:, 0], points[:, 1], c=normalized_mean_curv, cmap='coolwarm', s=50, vmin=0, vmax=1)
-
-    # Add a colorbar
-    plt.colorbar(scatter, label='Mean curvature')
-
-    # Set plot title and labels (optional)
-    plt.title('2D Point Cloud with Colorbar')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
-    plt.axis('equal')
-    if save_plot != 0:
-        plt.savefig(save_plot)
-    if config.SHOW_PLOTS == True:
-        # Show the plot
-        plt.show()
-    else:
-        plt.clf()
+# -----------------------------------------------------------------------------
 
 
 def load_model(model_path: str):
@@ -738,6 +790,8 @@ def load_model(model_path: str):
     model = ForceFinderModel((30, 30))
     model.load_state_dict(torch.load(model_path))
     return model
+# -----------------------------------------------------------------------------
+
 
 def average_values_along_y(f_values, coordinates):
     """
@@ -767,6 +821,7 @@ def average_values_along_y(f_values, coordinates):
     averaged_values = accumulated_values / count_values
 
     return unique_y, averaged_values
+# -----------------------------------------------------------------------------
 
 
 def load_models_and_plot_average_curvature(base_path: str, number_of_frames: int, path: matplotlib.patches.Path, offset: int):
@@ -831,72 +886,43 @@ def load_models_and_plot_average_curvature(base_path: str, number_of_frames: int
     plt.show()
 
     return 0
-
-def fit_and_plot_curvature(file_path_2d_param: str, file_path_3d_param: str, save_plot: int=0, save_model=0,
-                           scaling_factor = None, min_val_x = None, min_val_y = None):
-
-    # This defines a Scalable Vector Graphics image which corresponds to the (i think flat) leaf.
-    # You can just get it by parsing the image from Michal.
-    leaf_svg_path = config.LEAF_SVG_PATH
-
-    # Files containing the point clouds to be fitted.
-    file_path_2d = file_path_2d_param
-    file_path_3d = file_path_3d_param
-
-    point_cloud_2d1 = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
-    point_cloud_3d1 = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
+# -----------------------------------------------------------------------------
 
 
-    point_cloud_2d = point_cloud_2d1
-    # pcd = o3d.io.read_point_cloud(file_path_3d)
-    point_cloud_3d = point_cloud_3d1  # np.asarray(pcd.points) * scaling_factor
+def plot_curvature(file_path_2d_param: str, file_path_3d_param: str, path: matplotlib.patches.Path, model_path: str,
+                   save_plot: str=0):
 
-    print(f"point cloud 2d = {point_cloud_2d}")
-    print(f"point cloud 3d = {point_cloud_3d}")
+    # The point clouds to be fitted.
+    point_cloud_2d = np.loadtxt(file_path_2d_param, delimiter=',', skiprows=1)
+    point_cloud_3d = np.loadtxt(file_path_3d_param, delimiter=',', skiprows=1)
+
+    model = load_model(model_path)
+    surface = MinSurface(point_cloud_2d, point_cloud_3d, path, model)
+
+    plotter = Plotter(path)
+    plotter.plot_and_save_mean_curvature_2d(surface, save_plot=save_plot)
+
+    return
+# -----------------------------------------------------------------------------
+
+
+def fit_and_save_model(file_path_2d_param: str, file_path_3d_param: str, path: matplotlib.patches.Path,
+                           blueprint_path: str, save_model=0, scaling_factor=None, min_val_x=None,
+                           min_val_y=None):
+    # The point clouds to be fitted.
+    point_cloud_2d = np.loadtxt(file_path_2d_param, delimiter=',', skiprows=1)
+    point_cloud_3d = np.loadtxt(file_path_3d_param, delimiter=',', skiprows=1)
+    blueprint_point_cloud = image_to_point_array(blueprint_path)
 
     # sample points from a low discrepancy sequence
-    # -----------------------------------------------------------------------------
-    path = parse_path(leaf_svg_path)  # Parse the SVG path string and create a path object (path) that can be manipulated.
-    bbox = path.get_extents()  # Obtain the bounding box of the path, an imaginary rectangular box that completely encloses a geometric shape or a set of points.
-    # An affine transformation (norm_trans) is created to translate the path such that its top-left corner is at the origin (0, 0) and scale it so that the larger dimension is normalized to 1.
-    norm_trans = mpl.transforms.Affine2D().translate(-bbox.x0, -bbox.y0).scale(1 / max(bbox.width, bbox.height))
-    # The transformation is applied to the path using transform_path, and the bounding box is recalculated. The width and height of the bounding box are stored in the tuple wh.
-    path = norm_trans.transform_path(path)
-    bbox = path.get_extents()
-    wh = (bbox.width, bbox.height)
-    sampling_j = int(np.argmin(wh))  # index of the shortest side of the bounding box
-    sampling_bbox_len = wh[sampling_j]  # length of the shortest side of the bounding box
+    path, wh, sampling_j, sampling_bbox_len = normalize_path(path)
 
-    point_cloud_2d, scaling_factor, min_val_x, min_val_y = flip_and_normalize(point_cloud_2d, wh[0], original_scaling_factor=scaling_factor, original_min_val_x=min_val_x, original_min_val_y=min_val_y)
+    (point_cloud_2d, scaling_factor,
+     min_val_x, min_val_y, blueprint_point_cloud) = flip_and_normalize(point_cloud_2d, blueprint_point_cloud, wh[0],
+                                                                       original_scaling_factor=scaling_factor,
+                                                                       original_min_val_x=min_val_x,
+                                                                       original_min_val_y=min_val_y)
     point_cloud_3d *= scaling_factor
-    point_cloud_2d_x = point_cloud_2d[:, 0]
-    point_cloud_2d_y = point_cloud_2d[:, 1]
-
-    # ----------------- PLOT FOR TEST -----------------
-    if config.SHOW_PLOTS == True:
-        # Create a figure and axis
-        fig, ax = plt.subplots()
-        # for plotting
-        patch = PathPatch(path, facecolor="none", lw=2)
-        ax.add_patch(patch)
-        # Plot the point where we will apply the force in blue.
-        # ax.scatter(wh[0]/2, leaf_force_height, color="blue", label="Blue Point")
-        # ax.scatter(wh[0]/2, leaf_force_height2, color="blue", label="Blue Point")
-        # ax.scatter(wh[0]/2, leaf_weight_height, color="blue", label="Blue Point")
-        # ax.scatter(wh[0]/2, leaf_weight_height2, color="blue", label="Blue Point")
-        # Plot the point cloud.
-        ax.scatter(point_cloud_2d_x, point_cloud_2d_y, color="blue", label="Blue Point")
-        # Set axis limits and labels
-        # ax.set_xlim(0, wh[0])
-        # ax.set_ylim(0, wh[1])
-        ax.set_aspect('equal')
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        # Add a legend
-        ax.legend("plot for test")
-        # Show the plot
-        plt.show()
-    # -------------- END PLOT FOR TEST -----------------
 
     # now, the model of r(X, Y):
     # Essentially, it is a model with 2 inputs, 3 outputs and two inner layers with 30 neurons. The activation values
@@ -911,152 +937,18 @@ def fit_and_plot_curvature(file_path_2d_param: str, file_path_3d_param: str, sav
     if save_model != 0:
         torch.save(model.state_dict(), save_model)
 
-
-    # calculator = Calculator(surface)
-
-
-    # plot_model(True)
-    if config.SHOW_PLOTS == True:
-        plot_model(path, model)
-        plot_mean_curvature(path, surface, point_cloud_3d, point_cloud_2d, model)
-    plot_and_save_mean_curvature_2d(path, surface, save_plot=save_plot)
-
     return scaling_factor, min_val_x, min_val_y
+
+# -----------------------------------------------------------------------------
+
 
 def calculate_center_angle(surface: MinSurface, num_points: int, path: matplotlib.patches.Path):
     """
     Function for calculating the angle at the center of the leaf, relative to the floor.
     :return:
     """
-    # Sample a set of points on which we are going to calculate the normals, and get from the surface the points
-    # of the original 2d point cloud on which we based the surface.
-    points = sample_low_disc_seq(num_points, path)
-    point_cloud_2d = surface.point_cloud_2d
-
-
-    min_y = np.min(point_cloud_2d[:, 1])
-
-    print(f"point_cloud_2d = {point_cloud_2d}")
-    print(f"min_y = {min_y}")
-
-    # # Get the values that the model spits for the given points.
-    # points = torch.tensor(points, dtype=torch.float32, requires_grad=True)
-    # vals = surface.model(points)
-    #
-    # # The values are split into their X, Y, and Z components.
-    # x = vals[:, 0]
-    # y = vals[:, 1]
-    # z = vals[:, 2]
-    #
-    # # The gradient and Hessian matrices are calculated for each of the X, Y, and Z components using the grad_and_hess function.
-    # # This involves finding the first and second-order derivatives of each component with respect to the input points.
-    # g_x, h_x = surface.grad_and_hess(x, points)
-    # g_y, h_y = surface.grad_and_hess(y, points)
-    # g_z, h_z = surface.grad_and_hess(z, points)
-    #
-    # # Compute the normal vectors by expressing the cross product in components.
-    # # first the normal, n = r_X x r_Y / norm(...)
-    # # so, nx = r_Xy r_Yz - r_Xz r_Yy = g_y[0]*g_z[1] - g_z[0]*g_y[1]
-    # nx = g_y[:, 0] * g_z[:, 1] - g_z[:, 0] * g_y[:, 1]
-    # # ny = r_Xz r_Yx - r_Xx r_Yz = g_z[0]*g_x[1] - g_x[0]*g_z[1]
-    # ny = g_z[:, 0] * g_x[:, 1] - g_x[:, 0] * g_z[:, 1]
-    # # nz = r_Xx r_Yy - r_Xy r_Yx = g_x[0]*g_y[1] - g_y[0]*g_x[1]
-    # nz = g_x[:, 0] * g_y[:, 1] - g_y[:, 0] * g_x[:, 1]
-
     return
-
-
-if __name__ == "__main__":
-
-    base_path = config.BASE_PATH
-    number_of_frames = 531
-
-    leaf_svg_path = config.LEAF_SVG_PATH
-    path = parse_path(leaf_svg_path)
-    sample_square_lattice((100, 100), path)
-    offset = 203
-
-    # if config.SHOW_PLOTS == True:
-    #     for i in range(number_of_frames):
-    #         j = i + offset
-    #         print(f'session {j}')
-    #         file_path_2d = os.path.join(base_path, "Session_" + str(j),"pcd_2d_blue.csv")
-    #         file_path_3d = os.path.join(base_path, "Session_" + str(j),"pcd_3d_blue.csv")
-    #         # -------------
-    #         # reconstruction = base_path + "Session_" + str(j) + "/fused.ply"
-    #         # pcd = o3d.io.read_point_cloud(reconstruction)  # Read the point cloud
-    #         # o3d.visualization.draw_geometries([pcd])
-    #         # -------------
-    #         point_cloud_2d1 = np.loadtxt(file_path_2d, delimiter=',', skiprows=1)
-    #         point_cloud_3d1 = np.loadtxt(file_path_3d, delimiter=',', skiprows=1)
-    #         point_cloud_2d2 = np.hstack((point_cloud_2d1, np.zeros((point_cloud_2d1.shape[0], 1))))
-    #
-    #         rgb1 = np.stack((np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0]), np.ones(point_cloud_3d1.shape[0])), axis=1)
-    #         rgb2 = np.stack((np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0]), np.ones(point_cloud_2d2.shape[0])), axis=1)
-    #         mesh1 = pv.PolyData(point_cloud_3d1)
-    #         mesh2 = pv.PolyData(point_cloud_2d2)
-    #         mesh1['color'] = rgb1
-    #         mesh2['color'] = rgb2
-    #
-    #         # Set up a PyVista plotter and configure the settings.
-    #         pv.set_plot_theme('dark')
-    #         plotter = pv.Plotter()
-    #         plotter.enable_terrain_style(mouse_wheel_zooms=True)
-    #         plotter.enable_anti_aliasing()
-    #
-    #         # --------------------
-    #         # for plotting the actual point clouds
-    #         plotter.add_mesh(mesh1, point_size=20,
-    #                          render_points_as_spheres=True,
-    #                          scalars='color', rgb=True,
-    #                          )
-    #         plotter.add_mesh(mesh2, point_size=20,
-    #                          render_points_as_spheres=True,
-    #                          scalars='color', rgb=True,
-    #                          )
-    #         # --------------------
-    #
-    #         # enable eye_dome_lighting
-    #         plotter.enable_eye_dome_lighting()
-    #
-    #         # enable axes, with a large font size
-    #         plotter.show_grid()
-    #         plotter.show_bounds(all_edges=True, font_size=16, color='white', location='outer')
-    #
-    #         plotter.show(title=str(j), auto_close=False)
-    #
-    #
-    # scaling_factor = None
-    # min_val_x = None
-    # min_val_y = None
-    # for i in range(number_of_frames):
-    #     j = i + offset
-    #
-    #     print(f'session number {j}')
-    #     # =========> make sure the format of the path is the correct one <============
-    #     file_path_2d_current = os.path.join(base_path, "Session_" + str(j), "pcd_2d_red.csv")
-    #     file_path_3d_current = os.path.join(base_path, "Session_" + str(j), "pcd_3d_red.csv")
-    #     model_save_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_red.pt")
-    #     plot_save_path = os.path.join(base_path, "Session_" + str(j), "mean_curvature_red.png")
-    #     scaling_factor, min_val_x, min_val_y = fit_and_plot_curvature(file_path_2d_current, file_path_3d_current,
-    #                                                                   save_plot=plot_save_path, save_model=model_save_path, scaling_factor=scaling_factor, min_val_x=min_val_x, min_val_y=min_val_y)
-
-
-    scaling_factor = None
-    min_val_x = None
-    min_val_y = None
-    for i in range(number_of_frames):
-        j = i + offset
-        model_save_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_red.pt")
-        file_path_2d = os.path.join(base_path, "Session_" + str(j), "pcd_2d_red.csv")
-        file_path_3d = os.path.join(base_path, "Session_" + str(j), "pcd_3d_red.csv")
-        model = load_model(model_save_path)
-        print(f"frame number = {j}")
-        scaling_factor, min_val_x, min_val_y = plot_model_plus_target(path, model, file_path_2d, file_path_3d,
-                                                                      scaling_factor=scaling_factor, min_val_x=min_val_x,
-                                                                      min_val_y=min_val_y)
-
-
+# -----------------------------------------------------------------------------
 
     #
     # load_models_and_plot_average_curvature(base_path, number_of_frames, path, offset)

@@ -50,7 +50,7 @@ In this step we isolate leaves from the rest of the point cloud, we flatten them
 and then fit them to the blueprint of the leaf in order to obtain consistent local coordinates throughout the leaves.
 
 In order to do this, we need to set the correct limits for the segmentation trapezoids as well as the choose the 
-correct files and modes in the config file of the "segmeng_and_flatten_leaves" folder, and make sure the correct 
+correct files and modes in the config file of the "segment_and_flatten_leaves" folder, and make sure the correct 
 leaf blueprints are located in the "blueprints" subfolder and referenced. Afterwards we can run the file:
 
 ```bash
@@ -66,6 +66,36 @@ all_colors.py
 which really contains the same as "full_experiment" only looped over the relevant colors. Of course, before doing 
 this the correct limits and options have to be set.
 
+### Manually fit the 2d leaves that weren't fitted properly.
+
+While the automatic point set registration algorithm does a very decent job
+of fitting the leaves to the blueprint, there may be some frames that are not properly fitted. This normally occurs as 
+a result of poor segmentation or detection by colmap. As the experiment progresses, some of the leaves may be occluded 
+or their colors affected by shade, leading to an incomplete leaf reconstruction that gmmreg doesn't fit properly to 
+the blueprint. In those cases, it is necessary to identify the offending frames and fit them by manually.
+
+In order to do this, we first need to run option 3 in 
+
+```bash
+full_experiment.py
+```
+
+in the folder "segment_and_flatten_leaves" in order to identify the problematic frames. Then we run option 2 of the same
+file on the same frames. And then we can run the file
+
+```bash
+transform_2d_point_cloud_interactive.py
+```
+
+if we want to transform leaves individually in an interactive fashion, or if we already know the transformation and 
+want to apply it in bulk, we can run
+
+```bash
+transform_2d_point_cloud_bulk.py
+```
+
+Of course, we need to set the right parameters beforehand for either case.
+
 ### Fit 3d leaves (and possibly calculate values).
 
 In this step we obtain the mapping from the 2d surface to the 3d one. We begin by creating an almost uniform point 
@@ -73,4 +103,20 @@ cloud in 2d with points that fall within the contour of the leaf. We add to that
 cloud we got in the previous step, and we know what those should map to in 3d (namely the 3d point cloud). We obtain the
 mapping of the rest of the points by interpolation, finding the locations that minimize the elastic energy.
 
-In order to do this, 
+In order to do this, we need to set the correct running parameters (folder paths for the point clouds, blueprint path, 
+range of frames) in the config file of the "fit_3d_leaves" folder, and make sure that we set up the modes we want, then
+run the file:
+
+```bash
+full_experiment_fit_3d.py
+```
+
+Alternatively, we can run all the colors in a loop by running the file:
+
+```bash
+all_colors_fit_3d.py
+```
+
+which really contains the same as "full_experiment_fit_3d" only looped over the relevant colors. Of course, before doing 
+this the correct limits and options have to be set.
+

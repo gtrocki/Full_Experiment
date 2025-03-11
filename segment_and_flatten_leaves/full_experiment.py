@@ -3,35 +3,6 @@ import leaf_segmentation
 import numpy as np
 import config
 import os
-import shutil
-
-# Here we will get a folder for a full experiment, and we will create a function that iterates through every point
-# cloud and for each isolates one leaf and plots the mean
-def copy_fused_files(source_path, destination_path):
-
-    # Iterate over all folders in the source path
-    for session_folder in os.listdir(source_path):
-        session_folder_path = os.path.join(source_path, session_folder)
-
-        # Check if it's a directory
-        if os.path.isdir(session_folder_path):
-            # Create a destination folder with the same name in the destination path
-            destination_folder_path = os.path.join(destination_path, session_folder)
-            os.makedirs(destination_folder_path, exist_ok=True)
-
-            # Specify the source file and destination file paths within the "dense" folder
-            dense_folder_path = os.path.join(session_folder_path, 'dense')
-            source_file_path = os.path.join(dense_folder_path, 'fused.ply')
-            destination_file_path = os.path.join(destination_folder_path, 'fused.ply')
-
-            # Copy the 'fused.ply' file from the source to the destination folder
-            try:
-                shutil.copy(source_file_path, destination_file_path)
-                print(f"File 'fused.ply' copied from {session_folder} to {destination_folder_path}")
-            except FileNotFoundError:
-                print(f"File 'fused.ply' not found in {session_folder}")
-
-
 
 def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: int, color_range: np.ndarray = np.array([-0.5, 0.2, -0.7, 0]),
                         extra_color: int = None, extra_color_range: tuple = 0, result_option: int = 0,

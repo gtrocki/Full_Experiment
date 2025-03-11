@@ -2,12 +2,15 @@
 import numpy as np
 import open3d as o3d
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN, KMeans
 from sklearn.decomposition import PCA
 import scipy.stats
 import scipy.spatial
 from scipy.spatial import distance
 import math
+from PIL import Image
+from sklearn.base import BaseEstimator, TransformerMixin
 # ------------------------------------------------------------------------------
 
 
@@ -25,8 +28,8 @@ def crop_point_cloud(pcd: o3d.geometry.PointCloud, json_file_name: str) -> o3d.g
 # ------------------------------------------------------------------------------
 
 
-def filter_by_color(pcd: o3d.geometry.PointCloud, r_aim: float = 0.7, g_aim: float = 0.1, \
-                    b_aim: float = 0.1, r_error: float = 0.25, g_error: float = 0.25, \
+def filter_by_color(pcd: o3d.geometry.PointCloud, r_aim: float = 0.7, g_aim: float = 0.1,
+                    b_aim: float = 0.1, r_error: float = 0.25, g_error: float = 0.25,
                     b_error: float = 0.25) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud and a range of colors in RGB and filter according to this range.(RGB range between 0 and 1
@@ -51,8 +54,8 @@ def filter_by_color(pcd: o3d.geometry.PointCloud, r_aim: float = 0.7, g_aim: flo
 # ------------------------------------------------------------------------------
 
 
-def filter_by_color_hsv(pcd: o3d.geometry.PointCloud, h_aim: float = 0, s_aim: float = 0.8, \
-                        v_aim: float = 0.8, h_error: float = 0.1, s_error: float = 0.25, \
+def filter_by_color_hsv(pcd: o3d.geometry.PointCloud, h_aim: float = 0, s_aim: float = 0.8,
+                        v_aim: float = 0.8, h_error: float = 0.1, s_error: float = 0.25,
                         v_error: float = 0.25) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud and a range of colors in HSV and filter for this range.(HSV range between 0 and 1 as is
@@ -78,7 +81,7 @@ def filter_by_color_hsv(pcd: o3d.geometry.PointCloud, h_aim: float = 0, s_aim: f
 # ------------------------------------------------------------------------------
 
 
-def get_mask_by_hue_hsv(pcd: o3d.geometry.PointCloud, h_aim: float = 0, \
+def get_mask_by_hue_hsv(pcd: o3d.geometry.PointCloud, h_aim: float = 0,
                         h_error: float = 0.1) -> np.ndarray:
     """
     Receive a point cloud and a range of hue values in HSV to filter.
@@ -119,7 +122,7 @@ def filter_pcd_from_mask(pcd: o3d.geometry.PointCloud, mask: np.ndarray) -> o3d.
 # ------------------------------------------------------------------------------
 
 
-def filter_n_biggest_labels(pcd: o3d.geometry.PointCloud, labels: np.ndarray, n: int, \
+def filter_n_biggest_labels(pcd: o3d.geometry.PointCloud, labels: np.ndarray, n: int,
                             unwanted_label: int = None) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, an array of labels for its points, a number, and an optional unwanted label,
@@ -160,7 +163,7 @@ def find_median_label(labels: np.ndarray) -> int:
 # ------------------------------------------------------------------------------
 
 
-def filter_around_median_label(pcd: o3d.geometry.PointCloud, labels: np.ndarray, spread: int = 2000, \
+def filter_around_median_label(pcd: o3d.geometry.PointCloud, labels: np.ndarray, spread: int = 2000,
                                unwanted_label: int = -1) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, labels from clustering and a spread and an unwanted label and return the filtered point cloud
@@ -183,7 +186,7 @@ def filter_around_median_label(pcd: o3d.geometry.PointCloud, labels: np.ndarray,
 # ------------------------------------------------------------------------------
 
 
-def dbscan_based_on_distance(pcd: o3d.geometry.PointCloud, epsilon: float = 0.01, \
+def dbscan_based_on_distance(pcd: o3d.geometry.PointCloud, epsilon: float = 0.01,
                              min_points: int = 25, number_of_clusters: int = 3) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, a neighborhood size (epsilon), number of points, and number of clusters
@@ -202,7 +205,7 @@ def dbscan_based_on_distance(pcd: o3d.geometry.PointCloud, epsilon: float = 0.01
 # ------------------------------------------------------------------------------
 
 
-def remove_radius_outliers(pcd: o3d.geometry.PointCloud, min_points: int = 20, \
+def remove_radius_outliers(pcd: o3d.geometry.PointCloud, min_points: int = 20,
                            radius: float = 0.05) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, a number of points and a radius and return a point cloud containing all the same
@@ -218,8 +221,8 @@ def remove_radius_outliers(pcd: o3d.geometry.PointCloud, min_points: int = 20, \
 # ------------------------------------------------------------------------------
 
 
-def dbscan_based_on_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7, \
-                                       distance_weight: float = 1, epsilon: float = 0.08, min_points: int = 20, \
+def dbscan_based_on_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7,
+                                       distance_weight: float = 1, epsilon: float = 0.08, min_points: int = 20,
                                        number_of_clusters: int = 3, pca_num: int = 0) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, weight values for colors and coordinates, an epsilon, a min number of points a number
@@ -241,8 +244,8 @@ def dbscan_based_on_color_and_distance(pcd: o3d.geometry.PointCloud, color_weigh
     normalized_x = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 0]))
     normalized_y = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 1]))
     normalized_z = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 2]))
-    features = np.transpose( \
-        np.vstack((color_weight * normalized_R, color_weight * normalized_G, color_weight * normalized_B, \
+    features = np.transpose(
+        np.vstack((color_weight * normalized_R, color_weight * normalized_G, color_weight * normalized_B,
                    distance_weight * normalized_x, distance_weight * normalized_y, distance_weight * normalized_z)))
     if pca_num > 0:
         pca = PCA(n_components=pca_num)
@@ -255,9 +258,9 @@ def dbscan_based_on_color_and_distance(pcd: o3d.geometry.PointCloud, color_weigh
 # ------------------------------------------------------------------------------
 
 
-def dbscan_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7, \
-                                           distance_weight: float = 1, epsilon: float = 0.05, \
-                                           min_points: int = 25, number_of_clusters: int = 3, \
+def dbscan_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7,
+                                           distance_weight: float = 1, epsilon: float = 0.05,
+                                           min_points: int = 25, number_of_clusters: int = 3,
                                            pca_num: int = 0) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, weight values for colors and coordinates, an epsilon, a min number of points a number
@@ -294,8 +297,8 @@ def dbscan_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_w
 # ------------------------------------------------------------------------------
 
 
-def kmeans_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7, \
-                                           distance_weight: float = 1, number_of_clusters: int = 3, \
+def kmeans_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_weight: float = 0.7,
+                                           distance_weight: float = 1, number_of_clusters: int = 3,
                                            number_to_filter: int = 3, pca_num: int = 0) -> None:
     """
     Receive a point cloud, weights, number of clusters and number of clusters to return and a number of variables to
@@ -331,8 +334,8 @@ def kmeans_based_on_hsv_color_and_distance(pcd: o3d.geometry.PointCloud, color_w
     return pcd_filtered
 # ------------------------------------------------------------------------------
 
-def hsv_h_thresholding(pcd: o3d.geometry.PointCloud, h_aim_1: float = 0.019, h_aim_2: float = 0.736, \
-                       h_aim_3: float = 0.327, h_error_1: float = 0.02, \
+def hsv_h_thresholding(pcd: o3d.geometry.PointCloud, h_aim_1: float = 0.019, h_aim_2: float = 0.736,
+                       h_aim_3: float = 0.327, h_error_1: float = 0.02,
                        h_error_2: float = 0.02, h_error_3: float = 0.02) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, and 3 target values for the Hue in HSV color scheme and 3 error values.
@@ -356,8 +359,8 @@ def hsv_h_thresholding(pcd: o3d.geometry.PointCloud, h_aim_1: float = 0.019, h_a
 # ------------------------------------------------------------------------------
 
 
-def dbscan_based_on_normals_and_distance(pcd: o3d.geometry.PointCloud, normal_weight: float = 0.7, \
-                                        distance_weight:float = 1, epsilon: float=0.1, min_points: int = 7, \
+def dbscan_based_on_normals_and_distance(pcd: o3d.geometry.PointCloud, normal_weight: float = 0.7,
+                                        distance_weight:float = 1, epsilon: float=0.1, min_points: int = 7,
                                         number_of_clusters: int = 3, pca_num: int = 0) -> o3d.geometry.PointCloud:
     """
     Receive a point cloud, weight values for normals and coordinates, an epsilon, a min number of points a number
@@ -379,8 +382,8 @@ def dbscan_based_on_normals_and_distance(pcd: o3d.geometry.PointCloud, normal_we
     normalized_x = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 0]))
     normalized_y = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 1]))
     normalized_z = np.array(scipy.stats.zscore(np.array(pcd.points)[:, 2]))
-    features = np.transpose( \
-        np.vstack((normal_weight * normalized_nx, normal_weight * normalized_ny, normal_weight * normalized_nz, \
+    features = np.transpose(
+        np.vstack((normal_weight * normalized_nx, normal_weight * normalized_ny, normal_weight * normalized_nz,
                    distance_weight * normalized_x, distance_weight * normalized_y, distance_weight * normalized_z)))
     if pca_num > 0:
         pca = PCA(n_components=pca_num)
@@ -516,3 +519,96 @@ def tune_normal_directions_modified(pcd: o3d.geometry.PointCloud) -> o3d.geometr
             next_point = nearest_neighbors[current_point, 1]
     pcd.normals = o3d.utility.Vector3dVector(normals[:, :3])
     return pcd
+# -----------------------------------------------------------------------------
+
+def downsample_2d(points, voxel_size):
+    """
+    Downsample 2D array of points
+    """
+    points_3d = np.c_[points, np.zeros(len(points))]
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points_3d)
+    pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+    points_3d = np.asarray(pcd.points)
+    points = points_3d[:, 0:2]
+
+    return points
+# -----------------------------------------------------------------------------
+
+def image_to_point_array(image_path: str) -> np.ndarray:
+    """
+    Receives the path to an image and returns the corresponding point array.
+    For example from an image of the "ideal" leaf you can get array of points in that shape
+    :param image_path: The path to the image.
+    :return:
+    Return the point array.
+    """
+    # Load the image as a numpy array and normalize its values to [0, 1]
+    image = np.asarray(Image.open(image_path).convert("1"))
+    img_points = np.where(image == False)
+    img_points = np.dstack(img_points)[0]
+
+    # Normalize points
+    # scaler = MinMaxScaler((-0.5, 0.5))
+    # img_points = scaler.fit_transform(img_points)
+    # scaler = PointCloudWidthScaler(target_width=0.5)
+    scaler = PointCloudScaler(target_distance=1.0)
+    img_points = scaler.fit_transform(img_points)
+
+    # Downsample points with pcd
+    img_points = downsample_2d(img_points, voxel_size=0.03)
+    return img_points
+# -----------------------------------------------------------------------------
+
+def plot_overlapping_2d_point_clouds(point_cloud_1, point_cloud_2):
+    plt.scatter(point_cloud_1[:, 0], point_cloud_1[:, 1], color='red', marker='o', label='image points')
+    plt.scatter(point_cloud_2[:, 0], point_cloud_2[:, 1], color='blue', marker='x', label='data points')
+    plt.axis('equal')
+    plt.title("Plot of fitting")
+    plt.show()
+    return
+
+# =============================================================================
+# Scaler class to normalize the point cloud. We will have two separate classes for this.
+# The classes are PointCloudScaler and PointCloudWidthScaler. The first one is what we use
+# on the point cloud that we flattened using isomap. It will scale the largest distance from
+# the center (mean) of the point cloud to one of its points to be 0.5. The second one is what
+# we will use on the point cloud created from the picture of the blueprint (the target for)
+# fitting. This will turn the width of the point cloud (the leaf) to be 0.5.
+
+class PointCloudScaler(BaseEstimator, TransformerMixin):
+    def __init__(self, target_distance=1.0):
+        self.scaling_factor = None
+        self.mean_position = None
+        self.center_position = None
+        self.target_distance = target_distance
+
+    # def fit(self, X):
+    #     self.mean_position = np.mean(X, axis=0)
+    #     centered_points = X - self.mean_position
+    #     distances = np.linalg.norm(centered_points, axis=1)
+    #     max_distance = np.max(distances)
+    #     self.scaling_factor = self.target_distance / max_distance
+    #     return self
+
+    def fit(self, X):
+        # Calculate the bounding box
+        min_coords = np.min(X, axis=0)
+        max_coords = np.max(X, axis=0)
+
+        # Find the geometric center of the bounding box
+        self.center_position = (max_coords + min_coords) / 2
+
+        # Calculate the width of the bounding box (max x - min x)
+        current_width = max_coords[0] - min_coords[0]
+
+        # Determine the scaling factor based on the target width
+        self.scaling_factor = self.target_distance / current_width
+        return self
+
+    def transform(self, X):
+        # centered_points = X - self.mean_position
+        centered_points = X - self.center_position
+        scaled_points = centered_points * self.scaling_factor
+        return scaled_points
+# =============================================================================
