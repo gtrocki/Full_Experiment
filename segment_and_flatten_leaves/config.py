@@ -31,7 +31,7 @@ CROPPING_MAX_BOUND = [1, 1, 2] #[1.5, 1.5, 1]
 # The base path where the reconstructions of the experiment are saved.
 drive1 = "Y:"
 drive2 = "C:"
-BASE_EXPERIMENT_PATH = os.path.join(drive2, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-09-12-12-23")
+BASE_EXPERIMENT_PATH = os.path.join(drive2, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-05-29-11-18-42")
 
 # The path of the file containing the 2d image that represents the leaf blueprint.
 BLUEPRINT_PATH = os.path.join("../blueprints", BLUEPRINT_COLOR + "_leaf_simple.jpg")

@@ -79,16 +79,25 @@ def save_point_cloud(points, output_path):
     np.savetxt(output_path, points, delimiter=',', header='x,y', comments='')
 # -----------------------------------------------------------------------------
 
+# def plot_point_cloud(ax, original, transformed, title):
+#     ax.clear()
+#     ax.scatter(original[:, 0], original[:, 1], color='blue', label='Original', alpha=0.5)
+#     ax.scatter(transformed[:, 0], transformed[:, 1], color='red', label='Transformed', alpha=0.7)
+#     ax.set_title(title)
+#     ax.set_xlabel("X")
+#     ax.set_ylabel("Y")
+#     ax.axis('equal')
+#     ax.legend()
+#     ax.grid(True)
+#     plt.draw()
+
 def plot_point_cloud(ax, original, transformed, title):
     ax.clear()
-    ax.scatter(original[:, 0], original[:, 1], color='blue', label='Original', alpha=0.5)
-    ax.scatter(transformed[:, 0], transformed[:, 1], color='red', label='Transformed', alpha=0.7)
+    ax.scatter(original[:, 0], original[:, 1], color='red', marker='o', label='image points')
+    ax.scatter(transformed[:, 0], transformed[:, 1], color='blue', marker='x', label='data points')
     ax.set_title(title)
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
     ax.axis('equal')
     ax.legend()
-    ax.grid(True)
     plt.draw()
 
 # -----------------------------------------------------------------------------
@@ -174,11 +183,11 @@ def interactive_transform(file_path, output_path, blueprint_path):
 if __name__ == "__main__":
     drive = "C:"
     base_path= os.path.join(drive, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data",
-                             "2024-06-25-14-58-28")
+                             "2024-05-29-11-18-42")
 
     blueprint_path = os.path.join("../blueprints", "turquoise" + "_leaf_simple.jpg")
 
-    input_file = os.path.join(base_path, "Session_710", "pcd_2d_turquoise.csv")
-    output_file = os.path.join(base_path, "Session_710", "pcd_2d_turquoise_transformed.csv")
+    input_file = os.path.join(base_path, "Session_293", "pcd_2d_turquoise.csv")
+    output_file = os.path.join(base_path, "Session_293", "pcd_2d_turquoise.csv")
 
     interactive_transform(input_file, output_file, blueprint_path)

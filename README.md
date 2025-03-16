@@ -120,3 +120,12 @@ all_colors_fit_3d.py
 which really contains the same as "full_experiment_fit_3d" only looped over the relevant colors. Of course, before doing 
 this the correct limits and options have to be set.
 
+### Perform calculations.
+
+After we have fitted the models for the 3d leaves, we can begin making measurements. These will be found in the same
+files from the previous step (albeit running different options) or in the file 
+
+```bash
+masure_zippers.py
+```
+I STILL NEED TO MAKE SURE THE IMPLEMENTATION OF SUCH MEASUREMENTS IS DONE CORRECTLY!!!.

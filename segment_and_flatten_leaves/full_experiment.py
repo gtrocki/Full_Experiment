@@ -151,26 +151,23 @@ if __name__ == "__main__":
         # run_full_experiment(config.BASE_EXPERIMENT_PATH, 150, color_range=(-0.473 , -0.18, -0.1, -0.012), extra_color=1,
         #                     extra_color_range=(0, 0.5), result_option=1)
         trapezoid = np.array([
-            [-0.46, -0.012],  # Point A
-            [-0.187, -0.012],  # Point B
-            [-0.198, -0.109],  # Point C
-            [-0.46, -0.1]  # Point D
+            [-0.42, -0.011],  # Point A
+            [-0.169, -0.009],  # Point B
+            [-0.171, -0.087],  # Point C
+            [-0.42, -0.082]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 122, 530, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1, color='red')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 253, 123, color_range=trapezoid,
+                            extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='red')
     elif config.COLOR_CASE == 1:
         # Values for pink leaf.
-        # run_full_experiment(config.BASE_EXPERIMENT_PATH, 446, color_range=(-0.4, -0.144, 0.006, 0.167), extra_color=1,
-        #                     extra_color_range=(0, 0.5), result_option=1)
-        # Values for pink leaf 2
         trapezoid = np.array([
             [-0.350, 0.106],  # Point A
             [-0.241, 0.194],  # Point B
             [-0.054, 0.031],  # Point C
             [-0.113, -0.011]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1, color='pink')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 300, 26, color_range=trapezoid,
+                            extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='pink')
     elif config.COLOR_CASE == 2:
         # Values for blue leaf.
         trapezoid = np.array([
@@ -179,8 +176,8 @@ if __name__ == "__main__":
             [0.170, 0.219],  # Point C
             [0.023, 0.038]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1, color='blue')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 300, 26, color_range=trapezoid,
+                            extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='blue')
     elif config.COLOR_CASE == 3:
         # Values for green leaf.
         trapezoid = np.array([
@@ -189,8 +186,8 @@ if __name__ == "__main__":
             [0.164, 0.174],  # Point C
             [0.02, 0.038]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 10, 530, color_range=trapezoid, extra_color=0,
-                            extra_color_range=(0, 0.5), result_option=1, color='green')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid,
+                            extra_color=0, extra_color_range=(0, 0.5), result_option=2, color='green')
     elif config.COLOR_CASE == 4:
         # Values for turquoise leaf.
         trapezoid = np.array([
@@ -199,5 +196,5 @@ if __name__ == "__main__":
             [0.280, -0.040],  # Point C
             [0.027, -0.061]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid, extra_color=1,
-                            extra_color_range=(0, 0.68), result_option=1, color='turquoise')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 250, 76, color_range=trapezoid,
+                            extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='turquoise')
