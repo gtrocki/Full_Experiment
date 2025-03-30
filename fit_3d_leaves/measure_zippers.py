@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 from itertools import combinations
 
-def get_point_clouds(path, models, num_points=3000):
+def get_point_clouds(path, models, num_points=3000, get_2d_point_cloud=None):
     """
     Receive a path and models ang obtain the point clouds resulting from evaluating the model
     using points inside the path.
@@ -22,6 +22,7 @@ def get_point_clouds(path, models, num_points=3000):
     :param models: A list containing the models for each of the leaves.
     :param num_points: The number of points to use in each of the leaves.
     :return:
+    Return the 3d point clouds for the evaluated models and the basis 2d point cloud used to get them.
     """
     points = fitter.sample_low_disc_seq(num_points, path)  # Sample the points from a low discrepancy series.
 
@@ -30,7 +31,10 @@ def get_point_clouds(path, models, num_points=3000):
         # Put the points in the model (neural network) to get the output.
         vals.append(model(torch.tensor(points, dtype=torch.float32)).detach().numpy())
 
-    return vals
+    if get_2d_point_cloud==None:
+        return vals
+    else:
+        return vals, points
 
 
 # Function for plotting the result of the transformation of the model being applied to num_points points sampled
@@ -238,21 +242,12 @@ def merge_point_clouds(cloud1, cloud2):
 
 # =============================================================================
 
-def compute_gluing_lengths_and_save(offset, number_of_frames, colors, output_file):
-    # Base path of the directory with the experiment.
-    base_path = config.BASE_PATH
-
-    # Path of the leaf contour in space.
-    leaf_svg_path = config.LEAF_SVG_PATH
-    path = parse_path(leaf_svg_path)
-
-    distance_threshold = 0.01  # Adjust based on your scale
+def compute_gluing_lengths_and_save(starting_frame, number_of_frames, colors, output_file, path, distance_threshold):
 
     # Initialize an empty list to store rows
     rows = []
 
-    for i in range(number_of_frames):
-        j = i + offset
+    for j in range(starting_frame, starting_frame + number_of_frames):
         models = []
         row = []  # Start a new row
 
@@ -260,9 +255,9 @@ def compute_gluing_lengths_and_save(offset, number_of_frames, colors, output_fil
             model_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_" + color + ".pt")
             models.append(fitter.load_model(model_path))
 
-        point_clouds = get_point_clouds(path, models, num_points=3000)
+        point_clouds_3d = get_point_clouds(path, models, num_points=3000)
 
-        for (k, point_cloud1), (l, point_cloud2) in combinations(enumerate(point_clouds), 2):
+        for (k, point_cloud1), (l, point_cloud2) in combinations(enumerate(point_clouds_3d), 2):
 
             glued_pairs = find_gluing_lines(point_cloud1, point_cloud2, distance_threshold)
 
@@ -287,7 +282,84 @@ def compute_gluing_lengths_and_save(offset, number_of_frames, colors, output_fil
     # change the header if whe change the number of leaves.
     np.savetxt(output_file, result_array, delimiter=',', header='01,02,03,12,13,23', comments='')
 
+def compute_gluing_heights_and_save(starting_frame, number_of_frames, colors, output_file, path, distance_threshold):
 
+    # Initialize an empty list to store rows
+    rows = []
+
+    for j in range(starting_frame, starting_frame + number_of_frames):
+        models = []
+        row = []  # Start a new row
+
+        for color in colors:
+            model_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_" + color + ".pt")
+            models.append(fitter.load_model(model_path))
+
+        point_clouds_3d, points_2d = get_point_clouds(path, models, num_points=3000, get_2d_point_cloud=1)
+
+        for (k, point_cloud1), (l, point_cloud2) in combinations(enumerate(point_clouds_3d), 2):
+
+            glued_pairs = find_gluing_lines(point_cloud1, point_cloud2, distance_threshold)
+
+            # Extract glued points from pairs
+            glued_points_cloud1 = np.array(points_2d[[m for m, n in glued_pairs]])
+            glued_points_cloud2 = np.array(points_2d[[n for m, n in glued_pairs]])
+
+            # ---------------------------------------Plot for test
+            # # Extract x and y coordinates
+            # print(f"gluing of k = {k} with l = {l} in frame {j}")
+            # x1, y1 = points_2d[:, 0], points_2d[:, 1]
+            # x2, y2 = glued_points_cloud2[:, 0], glued_points_cloud2[:, 1]
+            #
+            # # Create plot
+            # fig, ax = plt.subplots()
+            # ax.scatter(x1, y1, color='blue', alpha=0.6, label='Point Cloud 1')
+            # ax.scatter(x2, y2, color='red', alpha=0.6, label='Point Cloud 2')  # Second point cloud in red
+            #
+            # # Set axis labels
+            # ax.set_xlabel("X-axis")
+            # ax.set_ylabel("Y-axis")
+            #
+            # # Add coordinate axes lines
+            # ax.axhline(y=0, color='black', linewidth=1)  # X-axis line
+            # ax.axvline(x=0, color='black', linewidth=1)  # Y-axis line
+            #
+            # # Ensure equal scaling of axes
+            # ax.set_aspect('equal', adjustable='datalim')
+            #
+            # # Adjust plot limits to fit both point clouds
+            # all_x = np.concatenate((x1, x2))
+            # all_y = np.concatenate((y1, y2))
+            # ax.set_xlim(min(all_x) - 1, max(all_x) + 1)
+            # ax.set_ylim(min(all_y) - 1, max(all_y) + 1)
+            #
+            # # Display grid and legend
+            # ax.grid(True, linestyle="--", alpha=0.5)
+            # ax.legend()
+            #
+            # # Show plot
+            # plt.show()
+            # ---------------------------------------
+
+            if glued_points_cloud1.size == 0:
+                row.append(0)
+            else:
+                height1 = np.max(glued_points_cloud1[:, 1])
+                row.append(height1)
+            if glued_points_cloud2.size == 0:
+                row.append(0)
+            else:
+                height2 = np.max(glued_points_cloud2[:, 1])
+                row.append(height2)
+
+        rows.append(row)
+        print(f'row = {row}')
+
+
+    # Convert the list of rows to a 2D numpy array
+    result_array = np.array(rows)
+    # change the header if whe change the number of leaves.
+    np.savetxt(output_file, result_array, delimiter=',', header='01,10,02,20,03,30,12,21,13,31,23,32', comments='')
 
 
 if __name__ == "__main__":
@@ -298,16 +370,18 @@ if __name__ == "__main__":
     leaf_svg_path = config.LEAF_SVG_PATH
     path = parse_path(leaf_svg_path)
 
+    distance_threshold = 0.03  # Adjust based on your scale
+
     # colors = ["red", "pink", "blue", "turquoise"]
     # models = []
-    # j = 312
+    # j = 310
     #
     # for color in colors:
     #     model_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_" + color + ".pt")
-    #     models.append(even_fitter.load_model(model_path))
+    #     models.append(fitter.load_model(model_path))
     #
     # point_clouds = get_point_clouds(path, models, num_points=3000)
-    # # plot_all_leaves(point_clouds, colors=colors)
+    # plot_all_leaves(point_clouds, colors=colors)
     #
     # # Example usage
     # # point_cloud1 and point_cloud2 should be numpy arrays with shape (n, 3)
@@ -343,9 +417,11 @@ if __name__ == "__main__":
     # print(f"length = {length}")
 
 
-    offset = 187
-    number_of_frames = 531
+    offset = 1
+    number_of_frames = 320
     colors = ["red", "pink", "blue", "turquoise"]
-    output_file =  os.path.join(base_path, "length_of_gluings.CSV")
+    output_file = os.path.join(base_path, "length_of_gluings.CSV")
+    output_file_2 = os.path.join(base_path, "height_of_gluings.CSV")
 
-    compute_gluing_lengths_and_save(offset, number_of_frames, colors, output_file)
+    compute_gluing_heights_and_save(offset, number_of_frames, colors, output_file_2, path, distance_threshold)
+    compute_gluing_lengths_and_save(offset, number_of_frames, colors, output_file, path, distance_threshold)

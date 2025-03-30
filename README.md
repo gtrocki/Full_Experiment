@@ -123,9 +123,10 @@ this the correct limits and options have to be set.
 ### Perform calculations.
 
 After we have fitted the models for the 3d leaves, we can begin making measurements. These will be found in the same
-files from the previous step (albeit running different options) or in the file 
+files from the previous step (albeit running different options) or in the files
 
 ```bash
 masure_zippers.py
+calculate_center_angles.py
 ```
 I STILL NEED TO MAKE SURE THE IMPLEMENTATION OF SUCH MEASUREMENTS IS DONE CORRECTLY!!!.

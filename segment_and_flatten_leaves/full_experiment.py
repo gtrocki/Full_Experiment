@@ -27,8 +27,12 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
     range of the experiments reconstructions.
     """
     gmmreg_case_number = None
-    for i in range(number_of_frames):
-        j = i + starting_frame
+    if (number_of_frames != None):
+        reconstructions = range(starting_frame, (starting_frame+number_of_frames))
+    else:
+        reconstructions = starting_frame
+    for j in reconstructions:
+
         # =========> make sure the format of the path is the correct one <============
         # current_path = base_path + "fused" + str(10 * i + 180) + ".ply"
         # current_path = base_path + "Session_" + str(j) + "/fused.ply"
@@ -63,6 +67,7 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
             print(f"scores = {scores}")
             print(f"Session {j}: done")
         if result_option == 11:
+            i = j - starting_frame
             fitter = isomap_fit.IsomapFit(blueprint_path,
                                            mapping=config.FIT_TYPE)
             # target_path_2d = base_path + "Session_" + str(j) + "/pcd_2d.csv"
@@ -152,11 +157,12 @@ if __name__ == "__main__":
         #                     extra_color_range=(0, 0.5), result_option=1)
         trapezoid = np.array([
             [-0.42, -0.011],  # Point A
-            [-0.169, -0.009],  # Point B
-            [-0.171, -0.087],  # Point C
+            [-0.180, -0.011],  # Point B
+            [-0.160, -0.087],  # Point C
             [-0.42, -0.082]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 253, 123, color_range=trapezoid,
+        list_of_frames = [613, 615, 639, 671, 696, 713, 717]
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, list_of_frames, None, color_range=trapezoid,
                             extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='red')
     elif config.COLOR_CASE == 1:
         # Values for pink leaf.
@@ -166,7 +172,7 @@ if __name__ == "__main__":
             [-0.054, 0.031],  # Point C
             [-0.113, -0.011]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 300, 26, color_range=trapezoid,
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 717, 1, color_range=trapezoid,
                             extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='pink')
     elif config.COLOR_CASE == 2:
         # Values for blue leaf.
@@ -176,7 +182,7 @@ if __name__ == "__main__":
             [0.170, 0.219],  # Point C
             [0.023, 0.038]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 300, 26, color_range=trapezoid,
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 717, 1, color_range=trapezoid,
                             extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='blue')
     elif config.COLOR_CASE == 3:
         # Values for green leaf.
@@ -186,15 +192,16 @@ if __name__ == "__main__":
             [0.164, 0.174],  # Point C
             [0.02, 0.038]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 203, 123, color_range=trapezoid,
-                            extra_color=0, extra_color_range=(0, 0.5), result_option=2, color='green')
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, 187, 531, color_range=trapezoid,
+                            extra_color=0, extra_color_range=(0, 0.5), result_option=3, color='green')
     elif config.COLOR_CASE == 4:
         # Values for turquoise leaf.
         trapezoid = np.array([
-            [0.02, 0.02],  # Point A
-            [0.230, 0.170],  # Point B
+            [0.007, 0.013],  # Point A
+            [0.230, 0.180],  # Point B
             [0.280, -0.040],  # Point C
-            [0.027, -0.061]  # Point D
+            [0.026, -0.061]  # Point D
         ])
-        run_full_experiment(config.BASE_EXPERIMENT_PATH, 250, 76, color_range=trapezoid,
+        list_of_frames = [190, 196, 203, 215, 300, 549, 550, 558, 561, 607, 627, 628, 676, 700, 702, 704, 710, 712, 713, 714, 715, 717]
+        run_full_experiment(config.BASE_EXPERIMENT_PATH, list_of_frames, None, color_range=trapezoid,
                             extra_color=1, extra_color_range=(0, 0.68), result_option=3, color='turquoise')

@@ -49,7 +49,7 @@ def run_full_experiment(base_path: str, starting_frame: int, number_of_frames: i
                                                         "pcd_3d_" + color + "_original_size.csv")
         else:
             file_path_3d = os.path.join(base_path, "Session_" + str(j),
-                                                        "pcd_3d_" + color + "_original_size.csv")
+                                                        "pcd_3d_" + color + ".csv")
         blueprint_path = os.path.join("../blueprints", color + "_leaf_simple.jpg")
         model_save_path = os.path.join(base_path, "Session_" + str(j), "fitting_model_" + color + ".pt")
 

@@ -183,11 +183,11 @@ def interactive_transform(file_path, output_path, blueprint_path):
 if __name__ == "__main__":
     drive = "C:"
     base_path= os.path.join(drive, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data",
-                             "2024-05-29-11-18-42")
+                             "2024-06-25-14-58-28")
 
     blueprint_path = os.path.join("../blueprints", "turquoise" + "_leaf_simple.jpg")
 
-    input_file = os.path.join(base_path, "Session_293", "pcd_2d_turquoise.csv")
-    output_file = os.path.join(base_path, "Session_293", "pcd_2d_turquoise.csv")
+    input_file = os.path.join(base_path, "Session_710", "pcd_2d_turquoise.csv")
+    output_file = os.path.join(base_path, "Session_710", "pcd_2d_turquoise.csv")
 
     interactive_transform(input_file, output_file, blueprint_path)
