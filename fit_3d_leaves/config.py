@@ -33,18 +33,18 @@ drive2 = "Y:"
 
 # Files containing the point clouds to be fitted.
 # BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-05-29-11-18-42")
-# BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-25-14-58-28")
-BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-09-12-12-23")
-
+BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-25-14-58-28")
+# BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2024-06-09-12-12-23")
+# BASE_PATH = os.path.join(drive1, "\\", "Users", "michalro", "PycharmProjects", "Full_Experiment", "data", "2025-04-30-14-40-16")
 
 SCALING_FACTOR = 0.6322986525350575
 FACTOR = 0.01
-FITTING_TO_ENERGY_RATIO = 10000
+FITTING_TO_ENERGY_RATIO = 1000000000000 #10000 100000
 INITIAL_HOLDER_ANGLE = 0 # in radians
 
 
-NUMBER_OF_FRAMES = 123
-INITIAL_FRAME = 203
+NUMBER_OF_FRAMES = 1
+INITIAL_FRAME = 270
 
 SHOW_PLOTS = True
 # SHOW_PLOTS = False

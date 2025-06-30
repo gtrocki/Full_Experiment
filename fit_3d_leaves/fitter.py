@@ -496,6 +496,8 @@ class Plotter():
 
         # Map normalized 'mean_curv' values to RGBA colors using the colormap
         rgb = colormap(normalized_mean_curv)
+        # Assign all the colors to red
+        rgb = np.tile(np.array([[1.0, 0.0, 0.0]]), (points.shape[0], 1))
 
         # rgb = np.stack((mean_curv, np.ones(points.shape[0]) * .3, np.ones(points.shape[0]) * .8), axis=1)  # Assign points to be colors.
         mesh['color'] = rgb
@@ -511,14 +513,16 @@ class Plotter():
                          render_points_as_spheres=True,
                          scalars='color', rgb=True,
                          )
-        plotter.add_mesh(mesh2, point_size=20,
-                         render_points_as_spheres=True,
-                         scalars='color', rgb=True,
-                         )
+        # plotter.add_mesh(mesh2, point_size=20,
+        #                  render_points_as_spheres=True,
+        #                  scalars='color', rgb=True,
+        #                  )
         # --------------------
 
         # enable eye_dome_lighting
         plotter.enable_eye_dome_lighting()
+        plotter.enable_trackball_style()
+        plotter.set_background('white')
 
         # enable axes, with a large font size
         plotter.show_grid()
